@@ -1,0 +1,10 @@
+#!/bin/sh
+# Reject malformed/rewritten worklog entries and anything unsafe for a public repo.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+if test -f "$root/scripts/worklog.py"; then
+    python3 "$root/scripts/worklog.py" check || exit 1
+fi
+if test -f "$root/scripts/check_staged_safety.py"; then
+    python3 "$root/scripts/check_staged_safety.py" || exit 1
+fi
+exit 0

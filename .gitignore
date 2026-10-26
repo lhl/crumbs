@@ -1,0 +1,76 @@
+# This repository is PUBLIC. When in doubt, ignore it and ask.
+# See AGENTS.md "Public-Repo Safety" for the rules behind this file.
+
+# --- Secrets and local environment (never commit) ---
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+credentials*
+secrets*
+service-account*.json
+.netrc
+id_rsa*
+id_ed25519*
+
+# --- Personal data: photos, location history, check-in exports ---
+# Crumbs processes exactly this kind of data. Real personal data never
+# enters git -- not in commits, fixtures, screenshots, or demo assets.
+# Use synthetic or explicitly consented, reviewed fixtures under
+# tests/fixtures/ instead (see AGENTS.md).
+/data/
+/private/
+/photos/
+/exports/
+/location-history/
+/takeout/
+*.gpx
+*.kml
+*.kmz
+
+# --- Model weights and large artifacts ---
+*.safetensors
+*.gguf
+*.onnx
+*.pt
+*.pth
+*.ckpt
+/models/
+/weights/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# --- Node / frontend (when added) ---
+node_modules/
+
+# --- Generated and local state ---
+# Generated worklog aggregate (source of truth: worklog/entries/)
+WORKLOG.md
+.worklog/
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Agent-runner state (per-user, never checked in) ---
+.claude/
+.codex/
+.pi/
+.multiloop/

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Refresh the ignored aggregate after merges.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+if test -f "$root/scripts/worklog.py"; then
+    python3 "$root/scripts/worklog.py" render --output "$root/WORKLOG.md" ||
+        echo "warning: could not refresh WORKLOG.md" >&2
+fi
+exit 0

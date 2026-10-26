@@ -1,0 +1,31 @@
+#!/bin/sh
+# Enforce a conventional subject plus a meaningful bullet-detail body.
+message_file=$1
+subject=$(sed -n '1p' "$message_file")
+
+case "$subject" in
+    "Merge "*|"Revert \""*) exit 0 ;;
+esac
+
+if ! printf '%s\n' "$subject" | grep -Eq '^(feat|fix|docs|plan|research|analysis|chore|refactor|test|perf|ci|build|release|security)(\([^)]+\))?!?: .+'; then
+    echo "error: commit subject must use an approved conventional prefix" >&2
+    exit 1
+fi
+
+if test "${#subject}" -gt 72; then
+    echo "error: commit subject must be 72 characters or fewer" >&2
+    exit 1
+fi
+
+if test -n "$(sed -n '2p' "$message_file")"; then
+    echo "error: commit subject must be followed by a blank line" >&2
+    exit 1
+fi
+
+bullet_count=$(awk 'NR >= 3 && /^- [^[:space:]].*/ { count++ } END { print count + 0 }' "$message_file")
+if test "$bullet_count" -lt 2; then
+    echo "error: commit body must contain at least two meaningful '- ' bullets" >&2
+    exit 1
+fi
+
+exit 0

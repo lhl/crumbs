@@ -14,6 +14,7 @@
         <span class="muted">globe + flat map · photos · time trail</span>
         <span id="stats" class="muted"></span>
         <span id="fps" class="muted"></span>
+        <span id="tile-status" class="muted"></span>
       </header>
       <div id="controls">
         <div class="group" role="group" aria-label="Projection">
@@ -23,6 +24,7 @@
         <div class="group">
           <label>Basemap
             <select id="style-select">
+              <option value="protomaps-local" selected>Protomaps PMTiles (fully local)</option>
               <option value="openfreemap-liberty">OpenFreeMap Liberty (vector, no key)</option>
               <option value="openfreemap-positron">OpenFreeMap Positron (vector, no key)</option>
               <option value="carto-voyager">CARTO Voyager (vector style)</option>

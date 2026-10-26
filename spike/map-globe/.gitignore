@@ -1,0 +1,7 @@
+node_modules/
+dist/
+# Fetched by tools/fetch-tiles.sh — local tile/font/sprite data, never committed.
+public/tiles/
+public/fonts/
+public/sprites/
+tools/bin/

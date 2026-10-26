@@ -9,7 +9,9 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173"
   },
   "dependencies": {
-    "maplibre-gl": "^5.7.1"
+    "@protomaps/basemaps": "5.7.2",
+    "maplibre-gl": "^5.7.1",
+    "pmtiles": "4.5.0"
   },
   "devDependencies": {
     "vite": "^6.0.7"

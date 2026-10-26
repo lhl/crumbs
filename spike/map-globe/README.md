@@ -7,10 +7,25 @@ Status: **working spike, exercised 2026-10-27** (headless Chromium, screenshots 
 ```bash
 cd spike/map-globe
 npm install
+sh tools/fetch-tiles.sh   # one-time: downloads the fully-local tile data (below) into git-ignored dirs
 npm run dev      # http://127.0.0.1:5173
-npm run build    # production bundle → dist/ (verified)
+npm run build    # production bundle → dist/ (verified; public/ tile data is copied into dist/)
 npm run preview  # serves the built version on :4173
 ```
+
+## Fully-local mode (Protomaps / PMTiles) — the default basemap
+
+`tools/fetch-tiles.sh` prepares everything the **Protomaps PMTiles (fully local)** style needs, all served same-origin at runtime:
+
+| Piece | Source | Local size (measured) |
+|---|---|---|
+| `public/tiles/protomaps-demo.pmtiles` | `pmtiles extract` (pinned go-pmtiles v1.28.2, downloaded by the script if absent) against the Protomaps daily planet build (`build.protomaps.com/<YYYYMMDD>.pmtiles`, override with `PROTOMAPS_BUILD`), `--region=tools/demo-regions.geojson --maxzoom=15` | **40 MB** for the Kyoto + Taipei + Lisbon demo regions together; fetch took ~16 s via HTTP range requests (the planet file itself is ~120 GB and is never downloaded) |
+| `public/fonts/` | glyph PBFs from `protomaps/basemaps-assets` (Noto Sans stacks the style references) | 15 MB |
+| `public/sprites/v4/` | sprite sheets for the style's icons | 180 KB |
+
+All of it is git-ignored (see `.gitignore`); nothing tile/font/sprite is committed. The style itself is generated in code with `@protomaps/basemaps` (`layers('protomaps', namedFlavor('light'), {lang:'en'})`) and tiles are read via the `pmtiles` JS protocol's HTTP range requests against the single local archive — so zooming/panning reads byte ranges from one 40 MB file, with no tile server at all. **Outside the three extracts the local basemap is intentionally blank**: that is what "offline for cached regions" looks like, and the header shows `local tiles ✓` when the archive is present (or tells you to run the fetch script when it isn't).
+
+Verified 2026-10-27 with **all non-localhost requests blocked** in headless Chromium: 0 external requests attempted, 35 same-origin range requests against the archive, Kyoto rendered with streets/labels/POIs, trip playback and trails working, ~41 fps in the dense Kyoto view under software GL (61 fps on the globe). This is the pattern PWA-05 should reuse for the product; regional extracts for a user's own trips can be produced the same way at import time or pre-downloaded per region.
 
 ## What it demonstrates
 

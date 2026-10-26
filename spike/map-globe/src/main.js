@@ -1,8 +1,28 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { Protocol } from 'pmtiles';
+import { layers as protomapsLayers, namedFlavor } from '@protomaps/basemaps';
 import { generatePhotos, photoThumb, TRIPS } from './data.js';
 
+// Fully-local basemap (PWA-05): one PMTiles archive + local glyphs/sprites, all same-origin.
+// Data is fetched by tools/fetch-tiles.sh into public/ (git-ignored); see README.
+maplibregl.addProtocol('pmtiles', new Protocol().tile);
+const LOCAL_STYLE = {
+  version: 8,
+  glyphs: `${location.origin}/fonts/{fontstack}/{range}.pbf`,
+  sprite: `${location.origin}/sprites/v4/light`,
+  sources: {
+    protomaps: {
+      type: 'vector',
+      url: `pmtiles://${location.origin}/tiles/protomaps-demo.pmtiles`,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: protomapsLayers('protomaps', namedFlavor('light'), { lang: 'en' }),
+};
+
 const STYLES = {
+  'protomaps-local': LOCAL_STYLE,
   'openfreemap-liberty': 'https://tiles.openfreemap.org/styles/liberty',
   'openfreemap-positron': 'https://tiles.openfreemap.org/styles/positron',
   'carto-voyager': 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
@@ -32,7 +52,7 @@ const $ = (id) => document.getElementById(id);
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: STYLES['openfreemap-liberty'],
+  style: STYLES['protomaps-local'],
   center: [124, 30],
   zoom: 2.2,
   attributionControl: { compact: true },
@@ -239,6 +259,11 @@ function setPlaying(on) {
   }
 }
 $('btn-play').addEventListener('click', () => setPlaying(!playing));
+
+// Local-tile presence check: the local style renders nothing outside the fetched extracts if this fails.
+fetch('/tiles/protomaps-demo.pmtiles', { headers: { Range: 'bytes=0-126' } })
+  .then((r) => { $('tile-status').textContent = (r.status === 200 || r.status === 206) ? '· local tiles ✓ (same-origin only)' : '· local tiles MISSING — run tools/fetch-tiles.sh'; })
+  .catch(() => { $('tile-status').textContent = '· local tiles MISSING — run tools/fetch-tiles.sh'; });
 
 // FPS meter (1s window) — the spike's built-in perf check.
 let frames = 0, last = performance.now();

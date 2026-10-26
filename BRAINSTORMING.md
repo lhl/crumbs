@@ -70,7 +70,7 @@ Proposed pipeline:
 6. Browse the reconstructed history through a map, timeline, and visit cards; search using natural-language memories.
 7. Answer compound, place-anchored questions agentically over the reconstructed history (prior visits, dishes, and orders near a place), and maintain the evidence-linked taste profile described above.
 
-Photo classification (step 2's front end) runs locally by default; cloud models are an explicit escalation for unresolved clusters only. Which models fill each step is decided by the experiments in [DISCOVERY.md](DISCOVERY.md), not assumed here.
+All steps run locally (local-only decision, [DISCOVERY.md](DISCOVERY.md)): DINOv3 and Muse Glimmer on the user's hardware. Unresolved cases produce a targeted question or an explicit unknown, never a cloud call. Which local model fills each step is decided by the experiments in DISCOVERY.md, not assumed here.
 
 **The technical core is event reconstruction and place resolution, not captioning or basic retrieval-augmented chat.** A food photo may not identify a restaurant, but a nearby receipt and exterior photo can jointly establish the visit. Answers should show that evidence.
 
@@ -90,14 +90,14 @@ Use multiple models where they improve the result, not to maximize model count. 
 
 | Model | Potential role | Scope decision |
 |---|---|---|
-| Muse Spark / Spark Open | Interpret images and reconcile evidence across photos to reconstruct visits and identify places | Test first on a real trip, including ambiguous examples (DISCOVERY E3/E5) |
+| Muse Spark / Spark Open | Cloud quality ceiling only: a development oracle to measure local models against on the consented demo subset | Not in the shipped pipeline — the local-only decision (DISCOVERY.md) excludes API and partner-hosted models from processing; oracle use is disclosed wherever its numbers are quoted |
 | Muse Glimmer | Local image triage, structured extraction, or orchestration of targeted follow-up analysis — the local core candidate on the Strix Halo box | Include if quality, latency, and hardware requirements are practical; open-weight bonus candidate (DISCOVERY E2/E3) |
 | DINOv3 (Meta FAIR, open weights, DINOv3 License) | Local embeddings: duplicate/burst grouping, same-dish/same-storefront matching, and a small trained head for the sightseeing/trip/personal/food classification | Supporting infrastructure, not the headline Meta model: the open-weight bonus names Glimmer/Spark Open only. Test in DISCOVERY E1 |
-| SAM 3.1 | Isolate relevant regions such as signs, receipts, or dishes for downstream analysis | Optional; segmentation does not itself identify a place or dish. Keep only if the DISCOVERY E4 ablation beats whole-image extraction |
+| SAM 3.1 | Isolate relevant regions such as signs, receipts, or dishes for downstream analysis | Excluded from the shipped pipeline (API-only, against the local-only decision). DISCOVERY E4 tests the value of cropping with local methods instead; segmentation does not itself identify a place or dish |
 | Muse Voice Transcribe | Spoken recollections or voice search | Stretch; not required for the photo-to-history workflow |
 | Muse Image / Muse Wonder | Potential illustrative presentation features | Defer; verify capabilities and never treat generated imagery as historical evidence |
 
-An agentic extension could identify a missing clue, select related photos or a place lookup, and reconcile the result. That is more useful than adding an agent solely for bonus eligibility. Local processing is attractive for privacy, but do not claim local-only operation if images or location data go to cloud services.
+An agentic extension could identify a missing clue, select related photos or a place lookup, and reconcile the result. That is more useful than adding an agent solely for bonus eligibility. **Processing is local-only by decision (see DISCOVERY.md):** all image classification, extraction, reconstruction, and retrieval run on local open models (Muse Glimmer + DINOv3) on the user's hardware (RTX PRO 6000 reference; Strix Halo portability target). The only possible cloud exception is optional voice transcription (Muse Voice Transcribe, off by default, audio only) — while it exists, public wording must say exactly that, never an unqualified “nothing leaves the device.”
 
 ### Hackathon scope and demo
 
@@ -114,6 +114,7 @@ Core scope: photo and one structured location-source import, evidence extraction
 Trust boundaries:
 - Preserve original photos and location exports; derived records must not overwrite source data.
 - Photos and location records are incomplete and sometimes inaccurate, not proof of a person's full movements. Combining them can expose sensitive routines; let users select the imported scope and avoid sending raw location history to cloud models unnecessarily.
+- All image and location processing runs locally on open models; no photo or location record is sent to a cloud model API. Optional voice transcription is the sole exception, off by default and labeled as such.
 - Do not infer an exact restaurant from food appearance alone.
 - Keep unknown places and uncertain dates rather than forcing confident answers.
 - Distinguish observed facts, model inferences, external lookup results, and user confirmations.
@@ -184,7 +185,7 @@ This could be a valuable local-model project, but broad format support and incre
 | **DINOv3** (open, DINOv3 License) | Meta FAIR self-supervised vision backbones (ViT-S 21M → ViT-7B, ConvNeXt 29–198M). Frozen backbones give dense features for similarity/matching and small trained classification heads, no fine-tuning of the backbone needed. Runs locally on modest hardware. Cannot read text or name dishes — pair with Glimmer/Spark. License requires a “Built with DINOv3” display on redistribution. |
 | **Muse Spark 1.3** (API) | Current Spark version, recommended for new work: 1M-token context, image/video/audio/PDF input, tool calling, structured output. Standard mode does not train on content; Contributor mode is discounted and may. Audio understanding is degraded in 1.3 (docs point to 1.2 or Voice Transcribe). |
 | **Muse Glimmer on Strix Halo** | **Unproven.** AMD is a launch partner, but the verified-platform docs list Intel/NVIDIA only, and vLLM's image is CUDA-only with no ROCm build. llama.cpp (ROCm/Vulkan) with the 17 GB GGUF + vision projector is the promising local path — DISCOVERY experiment E2 decides. |
-| **Muse Spark** (API) | Frontier multimodal + agentic; the "big brain" escalation target. |
+| **Muse Spark** (API) | Frontier multimodal + agentic. Not used in the shipped pipeline (local-only decision); at most a disclosed development oracle for measuring local-model quality on the consented demo subset. |
 | **SAM 3.1** (API) | Segmentation / tracking (text-promptable). |
 | **Muse Image / Muse Wonder** (API) | Image gen / (TBD — check what Wonder actually is). |
 | **Muse Code** | Coding agent — use it to build, and mention it in the submission. |

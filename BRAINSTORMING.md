@@ -21,6 +21,25 @@ Questions we want to answer:
 - “When did we last go there, and what did we order?”
 - “Put together that entire trip—I never made an album.”
 
+### Why it matters beyond nostalgia: practical recall in the moment
+
+The recurring pain is not reminiscing at home; it is being unable to look anything up *during a conversation or a decision*. Someone asks what was worth eating in Kyoto, or whether the famous popup was actually the best meal of that trip — and the answer exists in our photos but cannot be retrieved, named, or shared. Crumbs should make past experience usable:
+
+- **Recommend and share from evidence:** answer “what did you love in Kyoto?” with named places, the dishes, and the photos to send a friend — including “the famous place was good, but these two were better,” which no current photo app can produce.
+- **Order well next time:** at a repeat visit, pull up what we ordered before and what was good, instead of guessing from the menu. “What was good last time?” is a perennial, concrete pain point.
+- **Geospatial recall:** “near this neighborhood / near where I am, what did I previously enjoy?” — search anchored in place, not in filenames or dates.
+- **Revisit and rebook:** recover the hotel, the coffee shop near the station, the place worth returning to, with its evidence attached.
+
+### Classification is a core feature, not a by-product
+
+Sorting a library into **sightseeing, trips, personal, and food** (and, within those, evidence types such as dish, menu, receipt, sign, storefront, lodging, landmark) is itself a headline capability: it is what turns an undifferentiated camera roll into a browsable travel and food history. This classification should run **locally and privately on open models** (see [DISCOVERY.md](DISCOVERY.md)) — a large photo library should not have to leave the user's machine to be organized. Category boundaries are genuinely ambiguous (a family dinner is both personal and food); the taxonomy, its local classifier, and its measured accuracy are discovery experiment E1, not an assumption.
+
+### Agentic retrieval and a factual taste profile
+
+On top of the reconstructed history, an agent should answer compound questions by planning lookups — geospatial filter → past visits → dishes/orders → evidence — e.g. “near X, what did I enjoy?” or “what should I order again at this place?” Every answer shows the photos and records behind it; “you have not been there / unknown” is a valid answer.
+
+The same history supports a **taste profile**: which dishes, cuisines, and places recur, which places earned repeat visits, and what the user explicitly confirmed liking. This must stay factual and evidence-linked — photo frequency is biased (photogenic meals and trips are over-photographed; everyday favorites are under-photographed), so recurrence is a signal to show with its evidence, never an opaque verdict, and always correctable. It is a food-and-place preference summary, not a personality analysis.
+
 ### Product: visits and trips, not just photo tags
 
 The primary objects are **trips, visits, meals, and stays**. Photos, check-ins, and location records are evidence for those objects, rather than isolated images with generated captions.
@@ -49,13 +68,16 @@ Proposed pipeline:
 4. Resolve places by combining check-ins, location history, photo metadata, visible text, neighboring photos, and optional map/place lookups.
 5. Preserve evidence and uncertainty for each inferred detail; allow users to correct names and groupings.
 6. Browse the reconstructed history through a map, timeline, and visit cards; search using natural-language memories.
+7. Answer compound, place-anchored questions agentically over the reconstructed history (prior visits, dishes, and orders near a place), and maintain the evidence-linked taste profile described above.
+
+Photo classification (step 2's front end) runs locally by default; cloud models are an explicit escalation for unresolved clusters only. Which models fill each step is decided by the experiments in [DISCOVERY.md](DISCOVERY.md), not assumed here.
 
 **The technical core is event reconstruction and place resolution, not captioning or basic retrieval-augmented chat.** A food photo may not identify a restaurant, but a nearby receipt and exterior photo can jointly establish the visit. Answers should show that evidence.
 
 ### Why this is our leading hackathon choice
 
 - **Build for Your World:** solves a recurring personal problem using an existing photo collection.
-- **Impact:** recover places and experiences without manually maintaining a journal.
+- **Impact:** recover places and experiences without manually maintaining a journal — and make them usable in the moment: recommending to friends, reordering what was good, and recalling what you enjoyed near a place (see “Why it matters beyond nostalgia” above).
 - **Meta tooling:** multimodal reasoning has a necessary role in combining visual and textual clues across photos.
 - **Technical depth:** visit grouping, place resolution, conflicting evidence, uncertainty, correction, and evidence-backed retrieval.
 - **Demo:** a messy photo folder becomes a navigable map and timeline, followed by a successful search for a half-remembered restaurant.
@@ -68,9 +90,10 @@ Use multiple models where they improve the result, not to maximize model count. 
 
 | Model | Potential role | Scope decision |
 |---|---|---|
-| Muse Spark / Spark Open | Interpret images and reconcile evidence across photos to reconstruct visits and identify places | Test first on a real trip, including ambiguous examples |
-| Muse Glimmer | Local image triage, structured extraction, or orchestration of targeted follow-up analysis | Include if quality, latency, and hardware requirements are practical; open-weight bonus candidate |
-| SAM 3.1 | Isolate relevant regions such as signs, receipts, or dishes for downstream analysis | Optional; segmentation does not itself identify a place or dish |
+| Muse Spark / Spark Open | Interpret images and reconcile evidence across photos to reconstruct visits and identify places | Test first on a real trip, including ambiguous examples (DISCOVERY E3/E5) |
+| Muse Glimmer | Local image triage, structured extraction, or orchestration of targeted follow-up analysis — the local core candidate on the Strix Halo box | Include if quality, latency, and hardware requirements are practical; open-weight bonus candidate (DISCOVERY E2/E3) |
+| DINOv3 (Meta FAIR, open weights, DINOv3 License) | Local embeddings: duplicate/burst grouping, same-dish/same-storefront matching, and a small trained head for the sightseeing/trip/personal/food classification | Supporting infrastructure, not the headline Meta model: the open-weight bonus names Glimmer/Spark Open only. Test in DISCOVERY E1 |
+| SAM 3.1 | Isolate relevant regions such as signs, receipts, or dishes for downstream analysis | Optional; segmentation does not itself identify a place or dish. Keep only if the DISCOVERY E4 ablation beats whole-image extraction |
 | Muse Voice Transcribe | Spoken recollections or voice search | Stretch; not required for the photo-to-history workflow |
 | Muse Image / Muse Wonder | Potential illustrative presentation features | Defer; verify capabilities and never treat generated imagery as historical evidence |
 
@@ -134,6 +157,8 @@ Draft copy for the proposed product, not claims of implemented functionality.
 
 ### Next checks for Crumbs
 
+Model and hardware questions are tracked as experiments E0–E7 in [DISCOVERY.md](DISCOVERY.md), which gates PLAN.md. Remaining product-side checks:
+
 - [ ] Select a representative photo collection and overlapping location records we can process; choose a privacy-safe subset for the public demo.
 - [ ] Inspect available Foursquare, Google, and other location datasets: export/access method, schema, timestamps/timezones, place identifiers, precision, and coverage. Choose the first structured-source importer.
 - [ ] Write real retrieval questions and manually establish reference visits/place identities, including unknowns and conflicting source records.
@@ -155,7 +180,10 @@ This could be a valuable local-model project, but broad format support and incre
 |---|---|
 | **Muse Glimmer** (open, Apache 2.0) | 30B, text + image in. Built for **always-on local agents**: reliable tool calling, persistent state across restarts, self-managed memory, "hours-long sessions". Targets single consumer GPU / Mac. Runtimes: llama.cpp, vLLM, ExecuTorch, Ollama, LM Studio, Unsloth. Speculative decoding mentioned. |
 | **Muse Spark Open** (open) | ~816B-A42B MoE (per vLLM/Azure naming). Image + video + document input, reasoning, computer use, multi-agent / subagent fan-out. Datacenter-class — run via Baseten/Modal/Fireworks (`meta-models/muse-spark-open-1026` on Baseten), not locally. |
-| **Muse Voice Transcribe** (API) | **Streaming** ASR with built-in diarization (20+ speakers), live turn tracking, end-of-speech detection, keyword/context biasing. OpenAI-SDK compatible, `muse-voice-transcribe-1.0`, $0.18/hr. Japanese support **unconfirmed** — check. |
+| **Muse Voice Transcribe** (API) | **Streaming** ASR with built-in diarization (20+ speakers), live turn tracking, end-of-speech detection, keyword/context biasing. OpenAI-SDK compatible, `muse-voice-transcribe-1.0`, $0.18/hr. Docs (2026-10-27) say 25 evaluated languages with code-switching; Japanese support still **unconfirmed** — check the language list. |
+| **DINOv3** (open, DINOv3 License) | Meta FAIR self-supervised vision backbones (ViT-S 21M → ViT-7B, ConvNeXt 29–198M). Frozen backbones give dense features for similarity/matching and small trained classification heads, no fine-tuning of the backbone needed. Runs locally on modest hardware. Cannot read text or name dishes — pair with Glimmer/Spark. License requires a “Built with DINOv3” display on redistribution. |
+| **Muse Spark 1.3** (API) | Current Spark version, recommended for new work: 1M-token context, image/video/audio/PDF input, tool calling, structured output. Standard mode does not train on content; Contributor mode is discounted and may. Audio understanding is degraded in 1.3 (docs point to 1.2 or Voice Transcribe). |
+| **Muse Glimmer on Strix Halo** | **Unproven.** AMD is a launch partner, but the verified-platform docs list Intel/NVIDIA only, and vLLM's image is CUDA-only with no ROCm build. llama.cpp (ROCm/Vulkan) with the 17 GB GGUF + vision projector is the promising local path — DISCOVERY experiment E2 decides. |
 | **Muse Spark** (API) | Frontier multimodal + agentic; the "big brain" escalation target. |
 | **SAM 3.1** (API) | Segmentation / tracking (text-promptable). |
 | **Muse Image / Muse Wonder** (API) | Image gen / (TBD — check what Wonder actually is). |

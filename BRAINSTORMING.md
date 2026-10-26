@@ -34,6 +34,21 @@ The recurring pain is not reminiscing at home; it is being unable to look anythi
 
 Sorting a library into **sightseeing, trips, personal, and food** (and, within those, evidence types such as dish, menu, receipt, sign, storefront, lodging, landmark) is itself a headline capability: it is what turns an undifferentiated camera roll into a browsable travel and food history. This classification should run **locally and privately on open models** (see [DISCOVERY.md](DISCOVERY.md)) — a large photo library should not have to leave the user's machine to be organized. Category boundaries are genuinely ambiguous (a family dinner is both personal and food); the taxonomy, its local classifier, and its measured accuracy are discovery experiment E1, not an assumption.
 
+### The background agent: organized without being asked
+
+Because the whole stack runs locally (see the local-only decision in [DISCOVERY.md](DISCOVERY.md)), Crumbs can work **in the background, always-on, without sending a life-log to a cloud service**: new photos are classified, grouped into visits, and reconciled with location records as they arrive; the taste profile stays current; and the only interruptions are occasional, targeted questions where evidence genuinely cannot decide (“was this the place near the station?”). This is the role Muse Glimmer is explicitly built for (always-on local agents), and it is what makes the history *ready at the moment of need* instead of being a reconstruction you run and wait for.
+
+### Contextual options: the right memory at the right moment
+
+The payoff of a current, local, evidence-linked history is surfacing **contextual options** at decision moments, under the user's control:
+
+- **Arriving somewhere:** entering a neighborhood or city brings up what you previously enjoyed nearby — places, dishes, and the photos that prove it.
+- **Sitting down at a repeat restaurant:** what you ordered last time and what was good, before you decide.
+- **Talking or planning:** a friend asks for Kyoto recommendations, or a return trip is being planned — a shareable, evidence-backed shortlist in seconds, including “skip the famous place, these were better.”
+- **About to reorder or rebook:** the hotel, café, or dish you already know you liked, with its visit attached.
+
+Local processing is what makes proactive surfacing acceptable rather than creepy: the location triggers and the history never leave the device, triggers are user-configured, and every surfaced item links to its evidence. Contextual surfacing must be conservative — wrong or noisy prompts would destroy trust faster than no prompts — so precision and easy dismissal matter more than recall here.
+
 ### Agentic retrieval and a factual taste profile
 
 On top of the reconstructed history, an agent should answer compound questions by planning lookups — geospatial filter → past visits → dishes/orders → evidence — e.g. “near X, what did I enjoy?” or “what should I order again at this place?” Every answer shows the photos and records behind it; “you have not been there / unknown” is a valid answer.
@@ -77,10 +92,10 @@ All steps run locally (local-only decision, [DISCOVERY.md](DISCOVERY.md)): DINOv
 ### Why this is our leading hackathon choice
 
 - **Build for Your World:** solves a recurring personal problem using an existing photo collection.
-- **Impact:** recover places and experiences without manually maintaining a journal — and make them usable in the moment: recommending to friends, reordering what was good, and recalling what you enjoyed near a place (see “Why it matters beyond nostalgia” above).
+- **Impact:** recover places and experiences without manually maintaining a journal — and make them usable in the moment: recommending to friends, reordering what was good, and recalling what you enjoyed near a place (see “Why it matters beyond nostalgia” above). This does not save anyone's life; the claim is narrower and honest — a qualitative improvement that recurs at ordinary, frequent moments (eating out, traveling, recommending, planning), for anyone with years of photos they cannot search. Usefulness at frequent small moments, not severity of a single moment, is the impact argument; it only holds if the answers are fast, correct, and evidence-backed, which is why abstention and corrections are core features rather than polish.
 - **Meta tooling:** multimodal reasoning has a necessary role in combining visual and textual clues across photos.
-- **Technical depth:** visit grouping, place resolution, conflicting evidence, uncertainty, correction, and evidence-backed retrieval.
-- **Demo:** a messy photo folder becomes a navigable map and timeline, followed by a successful search for a half-remembered restaurant.
+- **Technical depth:** visit grouping, place resolution, conflicting evidence, uncertainty, correction, and evidence-backed retrieval — on a **fully local, multi-model stack** (DINOv3/Perception Encoder embeddings, a Glimmer-derived decision layer, generative Glimmer reconstruction, local SAM 3.1 segmentation; DISCOVERY.md). Nothing about the core is an API wrapper: the models are open weights we serve, post-train, calibrate, and evaluate ourselves on our own hardware. That self-built stack, and the measurements behind it, are the technical-depth claim.
+- **Demo:** a messy photo folder becomes a navigable map and timeline, followed by a successful search for a half-remembered restaurant — and a contextual moment: arriving near a past place, or sitting down at a repeat restaurant, surfaces what was good last time.
 
 This is a stronger-defined evolution of the family photo archivist idea below. It has a more bounded demonstration than general memory glasses and a more visual result than desktop file search. It must demonstrate reconstruction beyond a simple image analyzer or basic RAG application; eligibility is not guaranteed by the framing alone.
 

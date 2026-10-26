@@ -173,7 +173,7 @@ Nothing in §3 Must may quietly depend on an unproven item. Each dependency has 
 | R3 | Glimmer bf16 serving throughput on PRO 6000 (E2) | Pipeline latency, demo scale | Quantized Glimmer; smaller corpus for demo; PLM takes extraction volume | Oct 29 |
 | R4 | Glimmer-DE readout mechanics: single-token option codes, logprob coverage, LoRA training (E2b) | System-1 layer (Should) | Generative routing with schema validation; PE/DINO classification only | Oct 30 |
 | R5 | Local extraction quality incl. Japanese text (E3: Glimmer vs PLM) | Place resolution, dish identity | Confirmation-first UX (drafts + review queue carries more load); never lower the abstention bar silently | Oct 30 |
-| R6 | Map/globe library + tile provider terms, offline tiles for demo regions (§7.4) | Map/Globe flows | Static rendered map images for demo; globe via the same library's fallback projection | Oct 29 |
+| R6 | Map/globe library + tile provider terms, offline tiles for demo regions (§7.4) | Map/Globe flows | Static rendered map images for demo; globe via the same library's fallback projection | Oct 29 (spike done Oct 27: `spike/map-globe/` — MapLibre v5 globe+Mercator, OpenFreeMap/CARTO/OSM-raster styles, PMTiles recommended for the privacy-clean default; see its README) |
 | R7 | SAM 3.1 gated checkpoint access + E4 value | Segmentation (Stretch) | SAM 2 (Apache) or no segmentation; whole-image extraction | Oct 31 |
 | R8 | Place-lookup provider: access, terms, attribution, offline caching | Place enrichment, canonical names | Check-in/source names only; "unnamed place at <area>" labels | Oct 30 |
 | R9 | Local ASR quality incl. Japanese (E7); Muse Voice Transcribe language list | Voice (Should) | Typed Ask only; voice cut without penalty to Must | Nov 1 |

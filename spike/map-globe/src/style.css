@@ -1,0 +1,24 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+#app { display: flex; flex-direction: column; height: 100vh; }
+header { display: flex; gap: 12px; align-items: baseline; padding: 8px 12px; border-bottom: 1px solid #ddd; flex-wrap: wrap; }
+.muted { color: #667; font-size: 12px; }
+#controls { display: flex; gap: 16px; padding: 8px 12px; border-bottom: 1px solid #ddd; flex-wrap: wrap; align-items: center; }
+#controls .group { display: flex; gap: 6px; align-items: center; }
+button, select { font: inherit; padding: 4px 10px; border-radius: 999px; border: 1px solid #bbb; background: #fff; cursor: pointer; }
+button.on { background: #222; color: #fff; border-color: #222; }
+#main { flex: 1; display: flex; min-height: 0; }
+#map { flex: 1; min-width: 0; }
+#panel { width: 280px; border-left: 1px solid #ddd; display: flex; flex-direction: column; min-height: 0; }
+#photo-card { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+#photo-card img { width: 100%; border-radius: 8px; display: block; margin-bottom: 8px; }
+#photo-list { margin: 0; padding: 0 0 0 28px; overflow-y: auto; font-size: 13px; }
+#photo-list li { padding: 6px 8px; cursor: pointer; border-radius: 6px; }
+#photo-list li:hover { background: #f0f0f5; }
+#photo-list li.on { background: #ffe9e0; }
+#timeline { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid #ddd; }
+#timeline input { flex: 1; }
+.thumb-marker { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4); overflow: hidden; cursor: pointer; padding: 0; background: #fff; }
+.thumb-marker img { width: 100%; height: 100%; display: block; }
+.thumb-marker.on { border-color: #e4572e; transform: scale(1.25); z-index: 2; }
+@media (max-width: 720px) { #panel { display: none; } }

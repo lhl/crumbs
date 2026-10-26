@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Crumbs — globe + map spike</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥖</text></svg>" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <strong>🥖 Crumbs spike</strong>
+        <span class="muted">globe + flat map · photos · time trail</span>
+        <span id="stats" class="muted"></span>
+        <span id="fps" class="muted"></span>
+      </header>
+      <div id="controls">
+        <div class="group" role="group" aria-label="Projection">
+          <button id="btn-globe" class="on">🌐 Globe</button>
+          <button id="btn-flat">🗺️ Flat map</button>
+        </div>
+        <div class="group">
+          <label>Basemap
+            <select id="style-select">
+              <option value="openfreemap-liberty">OpenFreeMap Liberty (vector, no key)</option>
+              <option value="openfreemap-positron">OpenFreeMap Positron (vector, no key)</option>
+              <option value="carto-voyager">CARTO Voyager (vector style)</option>
+              <option value="osm-raster">OSM raster (fallback demo only)</option>
+            </select>
+          </label>
+        </div>
+        <div class="group">
+          <label>Trip
+            <select id="trip-select"><option value="all">All trips</option></select>
+          </label>
+          <button id="btn-stress">+5,000 stress photos</button>
+        </div>
+      </div>
+      <div id="main">
+        <div id="map"></div>
+        <aside id="panel">
+          <div id="photo-card">Select a photo marker or press Play.</div>
+          <ol id="photo-list"></ol>
+        </aside>
+      </div>
+      <footer id="timeline">
+        <button id="btn-play">▶ Play trail</button>
+        <input id="scrub" type="range" min="0" max="1000" value="0" />
+        <span id="clock" class="muted">—</span>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

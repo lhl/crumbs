@@ -7,22 +7,45 @@ import { generatePhotos, photoThumb, TRIPS } from './data.js';
 // Fully-local basemap (PWA-05): one PMTiles archive + local glyphs/sprites, all same-origin.
 // Data is fetched by tools/fetch-tiles.sh into public/ (git-ignored); see README.
 maplibregl.addProtocol('pmtiles', new Protocol().tile);
-const LOCAL_STYLE = {
-  version: 8,
-  glyphs: `${location.origin}/fonts/{fontstack}/{range}.pbf`,
-  sprite: `${location.origin}/sprites/v4/light`,
-  sources: {
-    protomaps: {
-      type: 'vector',
-      url: `pmtiles://${location.origin}/tiles/protomaps-demo.pmtiles`,
-      attribution: '© OpenStreetMap contributors',
+const ATTRIBUTION = '© OpenStreetMap contributors';
+function localStyle() {
+  // Two local archives: a z0-5 whole-planet globe backdrop, and z0-15 regional detail.
+  // Zoom-gated layer sets hand off around z6-7 (the regional low zooms also exist, so
+  // there is deliberate overlap rather than a coverage gap). Same glyphs/sprites for both.
+  const low = protomapsLayers('protomaps-globe', namedFlavor('light'), { lang: 'en' })
+    .map((l) => ({ ...l, id: `${l.id}-globe`, maxzoom: Math.min(l.maxzoom ?? 24, 7) }));
+  const detail = protomapsLayers('protomaps', namedFlavor('light'), { lang: 'en' })
+    .map((l) => ({ ...l, minzoom: Math.max(l.minzoom ?? 0, 6) }));
+  return {
+    version: 8,
+    glyphs: `${location.origin}/fonts/{fontstack}/{range}.pbf`,
+    sprite: `${location.origin}/sprites/v4/light`,
+    sources: {
+      'protomaps-globe': { type: 'vector', url: `pmtiles://${location.origin}/tiles/protomaps-globe.pmtiles`, attribution: ATTRIBUTION },
+      protomaps: { type: 'vector', url: `pmtiles://${location.origin}/tiles/protomaps-demo.pmtiles`, attribution: ATTRIBUTION },
     },
+    layers: [...low, ...detail],
+  };
+}
+// Streaming variant: no download at all — the pmtiles protocol issues HTTP range requests
+// straight against the remote planet archive, so only viewed tiles are ever transferred.
+// Online and not private (the archive host sees which tiles you view); shown for contrast.
+const STREAM_STYLE = {
+  version: 8,
+  glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+  sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/light',
+  sources: {
+    // NOTE: build.protomaps.com sends no CORS headers, so browsers cannot stream from it
+    // directly; the Source Cooperative mirror of the same basemap does (ACAO:*).
+    protomaps: { type: 'vector', url: 'pmtiles://https://data.source.coop/protomaps/openstreetmap/v4.pmtiles', attribution: ATTRIBUTION },
   },
   layers: protomapsLayers('protomaps', namedFlavor('light'), { lang: 'en' }),
 };
+const LOCAL_STYLE = localStyle();
 
 const STYLES = {
   'protomaps-local': LOCAL_STYLE,
+  'protomaps-stream': STREAM_STYLE,
   'openfreemap-liberty': 'https://tiles.openfreemap.org/styles/liberty',
   'openfreemap-positron': 'https://tiles.openfreemap.org/styles/positron',
   'carto-voyager': 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',

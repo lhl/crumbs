@@ -30,6 +30,14 @@ else
   echo "tiles already present (FORCE=1 to refresh)"
 fi
 
+# 2b) Lightweight globe backdrop: the whole planet at low zoom only (z0-5, ~15 MB),
+# so the local globe shows continents/labels everywhere; detail comes from the regional archive.
+if [ ! -f public/tiles/protomaps-globe.pmtiles ] || [ -n "${FORCE:-}" ]; then
+  "$PM" extract "https://build.protomaps.com/${BUILD}.pmtiles" public/tiles/protomaps-globe.pmtiles --maxzoom=5
+else
+  echo "globe tiles already present (FORCE=1 to refresh)"
+fi
+
 # 3) Fonts + sprites (small repo tarball; extracted locally so no font/sprite traffic at runtime)
 if [ ! -d public/fonts ] || [ ! -d public/sprites ] || [ -n "${FORCE:-}" ]; then
   tmp="$(mktemp -d)"
@@ -44,5 +52,5 @@ else
   echo "fonts/sprites already present (FORCE=1 to refresh)"
 fi
 
-du -sh public/tiles/protomaps-demo.pmtiles public/fonts public/sprites
+du -sh public/tiles/protomaps-demo.pmtiles public/tiles/protomaps-globe.pmtiles public/fonts public/sprites
 echo "done — start the app (npm run dev / preview) and pick 'Protomaps PMTiles (fully local)'."

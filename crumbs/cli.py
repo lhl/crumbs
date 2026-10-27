@@ -24,6 +24,7 @@ def main(argv=None) -> int:
     sub.add_parser("embed", help="DINOv3-embed all imported photos (EMB-01)")
     p_sim = sub.add_parser("similar", help="near-duplicate pairs from embeddings")
     p_sim.add_argument("--threshold", type=float, default=0.98)
+    sub.add_parser("group", help="deterministic visit/trip grouping (REC-01)")
 
     args = ap.parse_args(argv)
     conn = db.connect(config.DB_PATH)
@@ -49,6 +50,10 @@ def main(argv=None) -> int:
         print("similar:", report, f"| {len(pairs)} pairs")
         for a, b, s in pairs[:25]:
             print(f"  media {a} ~ {b}  cos={s}")
+    elif args.cmd == "group":
+        from .group import group_all
+
+        print("group:", group_all(conn))
     elif args.cmd == "stats":
         for (name,) in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"

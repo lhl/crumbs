@@ -21,6 +21,9 @@ def main(argv=None) -> int:
     p_imp.add_argument("root")
     p_imp.add_argument("--scope", default="")
     sub.add_parser("stats", help="row counts per table")
+    sub.add_parser("embed", help="DINOv3-embed all imported photos (EMB-01)")
+    p_sim = sub.add_parser("similar", help="near-duplicate pairs from embeddings")
+    p_sim.add_argument("--threshold", type=float, default=0.98)
 
     args = ap.parse_args(argv)
     conn = db.connect(config.DB_PATH)
@@ -34,6 +37,18 @@ def main(argv=None) -> int:
         root = Path(args.root).expanduser()
         stats = import_photos(conn, root, args.scope or f"photos from {root.name}")
         print("import:", stats)
+    elif args.cmd == "embed":
+        from .embed import embed_all
+
+        print("embed:", embed_all(conn))
+    elif args.cmd == "similar":
+        from .embed import similarity_report
+
+        report = similarity_report(conn, args.threshold)
+        pairs = report.pop("pairs")
+        print("similar:", report, f"| {len(pairs)} pairs")
+        for a, b, s in pairs[:25]:
+            print(f"  media {a} ~ {b}  cos={s}")
     elif args.cmd == "stats":
         for (name,) in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"

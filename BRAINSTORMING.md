@@ -63,9 +63,10 @@ The primary objects are **trips, visits, meals, and stays**. Photos, check-ins, 
 
 We have Foursquare location data, Google data, and potentially other location-history sources to draw on. Exact available exports, fields, and access methods still need inspection; do not assume a provider offers a usable API or complete historical export.
 
-- **Photos:** visual details, timestamps, and GPS where available.
+- **Photos:** visual details, timestamps, and GPS where available. Photos are a decent start on their own — treat them as the primary source for the first build.
 - **Foursquare:** available check-in/location records may supply named places and visit times.
 - **Google:** available location-history or other relevant exports may supply additional movement and place evidence; confirm the actual dataset and format.
+- **Stretch sources (only if spare time):** flight itineraries (Flighty, TripIt), GPS/fitness tracks (Wandering, Garmin), and lodging/travel bookings (Booking.com plus other booking emails searchable via msgvault). These could connect info across trips and stays, but each needs its export/schema inspected before any importer is promised.
 - **Other personal location sources:** add import adapters as concrete datasets become available, rather than promising universal integrations.
 
 This makes the project a **multi-source personal travel and food history**, not just a photo organizer. Location records can suggest visits with no photos; photos can supply the meal or experience behind a check-in. Neither source alone has to tell the whole story.
@@ -176,7 +177,7 @@ Draft copy for the proposed product, not claims of implemented functionality.
 Model and hardware questions are tracked as experiments E0–E7 in [DISCOVERY.md](DISCOVERY.md), which gates PLAN.md. Remaining product-side checks:
 
 - [ ] Select a representative photo collection and overlapping location records we can process; choose a privacy-safe subset for the public demo.
-- [ ] Inspect available Foursquare, Google, and other location datasets: export/access method, schema, timestamps/timezones, place identifiers, precision, and coverage. Choose the first structured-source importer.
+- [ ] Inspect available Foursquare, Google, and other location datasets (Flighty/TripIt, Wandering/Garmin, Booking.com + msgvault booking emails as stretch): export/access method, schema, timestamps/timezones, place identifiers, precision, and coverage. Choose the first structured-source importer; photos alone are a sufficient start.
 - [ ] Write real retrieval questions and manually establish reference visits/place identities, including unknowns and conflicting source records.
 - [ ] Inspect metadata coverage, supported photo formats, timezone issues, and missing GPS.
 - [ ] Test Meta models on signs, receipts, food, and cross-photo place identification; measure errors, latency, and cost.

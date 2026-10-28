@@ -48,6 +48,7 @@ def main(argv=None) -> int:
     p_api = sub.add_parser("serve", help="read-only local API for the Muse bridge (API-01 v1)")
     p_api.add_argument("--port", type=int, default=8770)
     p_api.add_argument("--host", default="127.0.0.1")
+    sub.add_parser("score", help="score model output against user labels (DAT-06)")
     sub.add_parser("correlate", help="cross-correlate photo visits with location stays")
 
     args = ap.parse_args(argv)
@@ -135,6 +136,12 @@ def main(argv=None) -> int:
 
         print(f"crumbs API at http://{args.host}:{args.port}/v1/ (read-only; Ctrl-C to stop)")
         api_serve(host=args.host, port=args.port)
+    elif args.cmd == "score":
+        import json as _json
+
+        from .score import score_all
+
+        print(_json.dumps(score_all(conn), indent=2, ensure_ascii=False))
     elif args.cmd == "correlate":
         from .locations import correlate
 

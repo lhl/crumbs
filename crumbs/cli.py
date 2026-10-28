@@ -29,6 +29,15 @@ def main(argv=None) -> int:
     p_cls.add_argument("--workers", type=int, default=4)
     p_exp = sub.add_parser("export-spike", help="export visits/photos GeoJSON for spike/map-globe")
     p_exp.add_argument("--out", default="-")
+    p_pf = sub.add_parser("places-fetch", help="fetch OSM places around food visits (REC-07, dev lookup)")
+    p_pf.add_argument("--radius", type=int, default=300)
+    p_nb = sub.add_parser("nearby", help="search cached places near a coordinate")
+    p_nb.add_argument("--lat", type=float, required=True)
+    p_nb.add_argument("--lon", type=float, required=True)
+    p_nb.add_argument("--radius", type=int, default=500)
+    p_nb.add_argument("--kind", default=None)
+    p_ps = sub.add_parser("place-search", help="search cached places by name")
+    p_ps.add_argument("text")
 
     args = ap.parse_args(argv)
     conn = db.connect(config.DB_PATH)
@@ -75,6 +84,20 @@ def main(argv=None) -> int:
             Path(args.out).write_text(text)
             print(f"wrote {args.out}: {len(data['features'])} features, "
                   f"{len(data['visits'])} visits, {len(data['trips'])} trips")
+    elif args.cmd == "places-fetch":
+        from .places import fetch_candidates
+
+        print("places-fetch:", fetch_candidates(conn, radius_m=args.radius))
+    elif args.cmd == "nearby":
+        from .places import nearby
+
+        for p in nearby(conn, args.lat, args.lon, args.radius, args.kind):
+            print(f"{p['distance_m']:7.0f} m  {p['kind'] or '?':10} {p['name']}  ({p['lat']:.5f}, {p['lon']:.5f}) [{p['source']}]")
+    elif args.cmd == "place-search":
+        from .places import search_name
+
+        for p in search_name(conn, args.text):
+            print(f"{p['kind'] or '?':10} {p['name']}  ({p['lat']:.5f}, {p['lon']:.5f}) [{p['source']}]")
     elif args.cmd == "stats":
         for (name,) in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"

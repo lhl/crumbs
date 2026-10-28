@@ -81,6 +81,30 @@ CREATE TABLE IF NOT EXISTS trip_visits (
     visit_id INTEGER NOT NULL REFERENCES visits(id),
     PRIMARY KEY (trip_id, visit_id)
 );
+CREATE TABLE IF NOT EXISTS places (
+    id INTEGER PRIMARY KEY,
+    external_id TEXT NOT NULL UNIQUE,   -- e.g. osm:node/123456
+    name TEXT NOT NULL,
+    kind TEXT,                           -- amenity value: restaurant|cafe|bar|...
+    cuisine TEXT,
+    lat REAL NOT NULL, lon REAL NOT NULL,
+    source TEXT NOT NULL,                -- osm-overpass | pmtiles-poi | checkin | user
+    provenance TEXT NOT NULL DEFAULT 'lookup',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS visit_place_candidates (
+    id INTEGER PRIMARY KEY,
+    visit_id INTEGER NOT NULL REFERENCES visits(id),
+    place_id INTEGER NOT NULL REFERENCES places(id),
+    distance_m REAL NOT NULL,
+    evidence TEXT NOT NULL,              -- gps | signage-text | checkin | user
+    score REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'candidate',  -- candidate | confirmed | rejected
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (visit_id, place_id, created_by)
+);
+CREATE INDEX IF NOT EXISTS idx_places_name ON places(name);
 CREATE INDEX IF NOT EXISTS idx_media_captured ON media_items(captured_at);
 CREATE INDEX IF NOT EXISTS idx_class_media ON classifications(media_id);
 """

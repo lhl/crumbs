@@ -42,6 +42,9 @@ def main(argv=None) -> int:
     p_loc.add_argument("path")
     sub.add_parser("stays", help="derive dwell stays from location history")
     sub.add_parser("tz", help="estimate camera UTC offsets by matching photos to the track (IMP-03)")
+    sub.add_parser("extract", help="selective Glimmer extraction over evidence photos (EXT v1)")
+    p_lab = sub.add_parser("label", help="run the local labeling helper UI (DAT-07)")
+    p_lab.add_argument("--port", type=int, default=8765)
     sub.add_parser("correlate", help="cross-correlate photo visits with location stays")
 
     args = ap.parse_args(argv)
@@ -115,6 +118,15 @@ def main(argv=None) -> int:
         from .locations import estimate_timezones
 
         print("tz:", estimate_timezones(conn))
+    elif args.cmd == "extract":
+        from .extract import extract_all
+
+        print("extract:", extract_all(conn))
+    elif args.cmd == "label":
+        from .label_server import serve
+
+        print(f"labeler at http://127.0.0.1:{args.port}/ (Ctrl-C to stop)")
+        serve(port=args.port)
     elif args.cmd == "correlate":
         from .locations import correlate
 

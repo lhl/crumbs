@@ -35,6 +35,24 @@ CREATE TABLE IF NOT EXISTS media_items (
     import_id INTEGER NOT NULL REFERENCES source_imports(id),
     provenance TEXT NOT NULL DEFAULT 'observed'
 );
+CREATE TABLE IF NOT EXISTS extractions (
+    id INTEGER PRIMARY KEY,
+    media_id INTEGER NOT NULL REFERENCES media_items(id),
+    model TEXT NOT NULL,
+    checkpoint TEXT NOT NULL,
+    data_json TEXT NOT NULL,             -- parsed extraction (visible_text, dishes, place names)
+    raw_text TEXT,                       -- model's full reply for audit
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    provenance TEXT NOT NULL DEFAULT 'inferred'
+);
+CREATE TABLE IF NOT EXISTS labels (
+    id INTEGER PRIMARY KEY,
+    media_id INTEGER NOT NULL REFERENCES media_items(id),
+    field TEXT NOT NULL,                 -- category | evidence | dish | place | visit_grouping
+    value TEXT NOT NULL,                 -- the label as given (JSON for structured values)
+    source TEXT NOT NULL DEFAULT 'user', -- who/what produced this label
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS classifications (
     id INTEGER PRIMARY KEY,
     media_id INTEGER NOT NULL REFERENCES media_items(id),

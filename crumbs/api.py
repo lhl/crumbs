@@ -57,6 +57,7 @@ def make_handler(conn):
         def _json(self, obj, code=200):
             body = json.dumps(obj, ensure_ascii=False).encode()
             self.send_response(code)
+            self.send_header("Access-Control-Allow-Origin", "*")  # local dev surfaces (PWA on another port)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()

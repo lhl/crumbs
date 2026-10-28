@@ -304,6 +304,25 @@ function setPlaying(on) {
 }
 $('btn-play').addEventListener('click', () => setPlaying(!playing));
 
+// Ask panel: talks to the local Crumbs API (`crumbs serve`, port 8770). If it
+// is not running, the panel says so plainly instead of faking an answer.
+async function runAsk() {
+  const q = $('ask-q').value.trim();
+  if (!q) return;
+  const box = $('ask-answer');
+  box.textContent = 'Asking the local index…';
+  try {
+    const r = await fetch(`http://127.0.0.1:8770/v1/ask?q=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    box.textContent = (d.answer || d.error || 'No answer.') +
+      (d.evidence ? `\n[evidence: visits ${JSON.stringify(d.evidence.visits)} · status ${d.status}]` : '');
+  } catch {
+    box.textContent = 'Local API offline — start it with: python3 -m crumbs.cli serve';
+  }
+}
+$('ask-btn').addEventListener('click', runAsk);
+$('ask-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') runAsk(); });
+
 // Local-tile presence check: the local style renders nothing outside the fetched extracts if this fails.
 fetch('/tiles/protomaps-demo.pmtiles', { headers: { Range: 'bytes=0-126' } })
   .then((r) => { $('tile-status').textContent = (r.status === 200 || r.status === 206) ? '· local tiles ✓ (same-origin only)' : '· local tiles MISSING — run tools/fetch-tiles.sh'; })

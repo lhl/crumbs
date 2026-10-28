@@ -10,6 +10,11 @@ button.on { background: #222; color: #fff; border-color: #222; }
 #main { flex: 1; display: flex; min-height: 0; }
 #map { flex: 1; min-width: 0; }
 #panel { width: 280px; border-left: 1px solid #ddd; display: flex; flex-direction: column; min-height: 0; }
+#ask-box { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+#ask-box .ask-row { display: flex; gap: 6px; }
+#ask-box input { flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; min-width: 0; }
+#ask-box button { padding: 6px 12px; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+#ask-answer { margin-top: 8px; white-space: pre-wrap; line-height: 1.45; }
 #photo-card { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 14px; }
 #photo-card img { width: 100%; border-radius: 8px; display: block; margin-bottom: 8px; }
 #photo-list { margin: 0; padding: 0 0 0 28px; overflow-y: auto; font-size: 13px; }

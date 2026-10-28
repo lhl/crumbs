@@ -38,6 +38,11 @@ def main(argv=None) -> int:
     p_nb.add_argument("--kind", default=None)
     p_ps = sub.add_parser("place-search", help="search cached places by name")
     p_ps.add_argument("text")
+    p_loc = sub.add_parser("import-locations", help="import a Wanderings locations export (GeoJSON)")
+    p_loc.add_argument("path")
+    sub.add_parser("stays", help="derive dwell stays from location history")
+    sub.add_parser("tz", help="estimate camera UTC offsets by matching photos to the track (IMP-03)")
+    sub.add_parser("correlate", help="cross-correlate photo visits with location stays")
 
     args = ap.parse_args(argv)
     conn = db.connect(config.DB_PATH)
@@ -98,6 +103,22 @@ def main(argv=None) -> int:
 
         for p in search_name(conn, args.text):
             print(f"{p['kind'] or '?':10} {p['name']}  ({p['lat']:.5f}, {p['lon']:.5f}) [{p['source']}]")
+    elif args.cmd == "import-locations":
+        from .locations import import_wanderings
+
+        print("import-locations:", import_wanderings(conn, Path(args.path)))
+    elif args.cmd == "stays":
+        from .locations import derive_stays
+
+        print("stays:", derive_stays(conn))
+    elif args.cmd == "tz":
+        from .locations import estimate_timezones
+
+        print("tz:", estimate_timezones(conn))
+    elif args.cmd == "correlate":
+        from .locations import correlate
+
+        print("correlate:", correlate(conn))
     elif args.cmd == "stats":
         for (name,) in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"

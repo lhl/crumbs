@@ -104,6 +104,40 @@ CREATE TABLE IF NOT EXISTS visit_place_candidates (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (visit_id, place_id, created_by)
 );
+CREATE TABLE IF NOT EXISTS location_records (
+    id INTEGER PRIMARY KEY,
+    source TEXT NOT NULL,                -- wanderings | foursquare | google
+    recorded_at TEXT NOT NULL,           -- UTC ISO
+    ts_ms INTEGER NOT NULL,
+    lat REAL NOT NULL, lon REAL NOT NULL,
+    accuracy_m REAL,
+    import_id INTEGER NOT NULL REFERENCES source_imports(id),
+    provenance TEXT NOT NULL DEFAULT 'observed'
+);
+CREATE TABLE IF NOT EXISTS stays (
+    id INTEGER PRIMARY KEY,
+    started_at TEXT NOT NULL, ended_at TEXT NOT NULL,   -- UTC ISO
+    center_lat REAL NOT NULL, center_lon REAL NOT NULL,
+    point_count INTEGER NOT NULL,
+    created_by TEXT NOT NULL,
+    provenance TEXT NOT NULL DEFAULT 'inferred',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS visit_stays (
+    visit_id INTEGER NOT NULL REFERENCES visits(id),
+    stay_id INTEGER NOT NULL REFERENCES stays(id),
+    center_distance_m REAL NOT NULL,
+    time_relation TEXT NOT NULL,         -- overlap | near (within 2h)
+    PRIMARY KEY (visit_id, stay_id)
+);
+CREATE TABLE IF NOT EXISTS tz_estimates (
+    media_id INTEGER PRIMARY KEY REFERENCES media_items(id),
+    offset_hours INTEGER NOT NULL,       -- camera clock offset ahead of UTC that best fits the track
+    track_distance_m REAL NOT NULL,      -- distance to interpolated track position at that offset
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_loc_ts ON location_records(ts_ms);
 CREATE INDEX IF NOT EXISTS idx_places_name ON places(name);
 CREATE INDEX IF NOT EXISTS idx_media_captured ON media_items(captured_at);
 CREATE INDEX IF NOT EXISTS idx_class_media ON classifications(media_id);

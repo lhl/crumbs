@@ -124,7 +124,7 @@ Agent-handoff checklist for [PLAN.md](PLAN.md). Conventions:
 - [ ] **API-06 [S]** Contextual feed API: current contextual options with trigger reason + evidence + dismiss endpoint. *Acceptance:* AGT-07 triggers surface through the API with reasons.
 - [ ] **API-07 [S]** Taste profile + shortlist APIs (§9.10, AGT-08) with per-item evidence and correct/remove actions. *Acceptance:* profile edits change shortlist output.
 - [ ] **API-08 [M]** Local access control: bind to localhost by default; LAN mode requires a pairing token; no unauthenticated LAN exposure. *Acceptance:* unauthenticated LAN request is rejected in a test.
-- [ ] **API-09 [X]** Muse channel interface (§8): read-only query endpoint/MCP-style tool surface over AGT-01/AGT-02 with the same evidence contract and API-08 auth. *Acceptance:* an external agent channel answers one golden query through it; PWA unaffected if removed.
+- [ ] **API-09 [X]** Muse channel interface (§8): read-only query endpoint/MCP-style tool surface over AGT-01/AGT-02 with the same evidence contract and API-08 auth. *Acceptance:* an external agent channel answers one golden query through it; PWA unaffected if removed. *Local half built 2026-10-28 (worklog 20261028T052535): `crumbs serve` read-only API with health/search/nearby/visits/places/anchor endpoints, token auth, server-side `near=current`, privacy tiers 0/1/2; demo anchor query verified by curl. Remaining: the tunnel + Muse-side skill (owner steps) and the acceptance query through the actual channel.*
 
 ## PWA — Progressive web app and UI flows (PLAN §9)
 

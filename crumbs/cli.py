@@ -45,6 +45,9 @@ def main(argv=None) -> int:
     sub.add_parser("extract", help="selective Glimmer extraction over evidence photos (EXT v1)")
     p_lab = sub.add_parser("label", help="run the local labeling helper UI (DAT-07)")
     p_lab.add_argument("--port", type=int, default=8765)
+    p_api = sub.add_parser("serve", help="read-only local API for the Muse bridge (API-01 v1)")
+    p_api.add_argument("--port", type=int, default=8770)
+    p_api.add_argument("--host", default="127.0.0.1")
     sub.add_parser("correlate", help="cross-correlate photo visits with location stays")
 
     args = ap.parse_args(argv)
@@ -127,6 +130,11 @@ def main(argv=None) -> int:
 
         print(f"labeler at http://127.0.0.1:{args.port}/ (Ctrl-C to stop)")
         serve(port=args.port)
+    elif args.cmd == "serve":
+        from .api import serve as api_serve
+
+        print(f"crumbs API at http://{args.host}:{args.port}/v1/ (read-only; Ctrl-C to stop)")
+        api_serve(host=args.host, port=args.port)
     elif args.cmd == "correlate":
         from .locations import correlate
 

@@ -90,6 +90,12 @@ def make_handler(conn):
                     return self._json({"places": search_name(conn, q.get("q", [""])[0])})
                 if path == "/v1/anchor":
                     return self._json(self._anchor(q, tier))
+                if path == "/v1/ask":
+                    from .ask import ask as ask_engine
+
+                    lat = float(q["lat"][0]) if "lat" in q else (CURRENT["lat"] if q.get("near", [""])[0] == "current" else None)
+                    lon = float(q["lon"][0]) if "lon" in q else (CURRENT["lon"] if q.get("near", [""])[0] == "current" else None)
+                    return self._json(ask_engine(conn, q.get("q", [""])[0], lat=lat, lon=lon))
                 return self._json({"error": "not found"}, 404)
             except Exception as e:
                 return self._json({"error": f"{type(e).__name__}: {e}"}, 500)

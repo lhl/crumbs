@@ -50,6 +50,10 @@ def main(argv=None) -> int:
     p_api.add_argument("--host", default="127.0.0.1")
     sub.add_parser("score", help="score model output against user labels (DAT-06)")
     sub.add_parser("reconcile", help="evidence-score visits and build the review queue (REC-02)")
+    p_ask = sub.add_parser("ask", help="ask the local index a question (AGT v1)")
+    p_ask.add_argument("question")
+    p_ask.add_argument("--lat", type=float, default=None)
+    p_ask.add_argument("--lon", type=float, default=None)
     sub.add_parser("correlate", help="cross-correlate photo visits with location stays")
 
     args = ap.parse_args(argv)
@@ -147,6 +151,12 @@ def main(argv=None) -> int:
         from .reconcile import reconcile_all
 
         print("reconcile:", reconcile_all(conn))
+    elif args.cmd == "ask":
+        from .ask import ask
+
+        result = ask(conn, args.question, lat=args.lat, lon=args.lon)
+        print(result["answer"])
+        print("[evidence:", result["evidence"], "| status:", result["status"] + "]")
     elif args.cmd == "correlate":
         from .locations import correlate
 

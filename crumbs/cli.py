@@ -25,6 +25,10 @@ def main(argv=None) -> int:
     p_sim = sub.add_parser("similar", help="near-duplicate pairs from embeddings")
     p_sim.add_argument("--threshold", type=float, default=0.98)
     sub.add_parser("group", help="deterministic visit/trip grouping (REC-01)")
+    p_cls = sub.add_parser("classify", help="Glimmer classification pass (needs llama-server)")
+    p_cls.add_argument("--workers", type=int, default=4)
+    p_exp = sub.add_parser("export-spike", help="export visits/photos GeoJSON for spike/map-globe")
+    p_exp.add_argument("--out", default="-")
 
     args = ap.parse_args(argv)
     conn = db.connect(config.DB_PATH)
@@ -54,6 +58,23 @@ def main(argv=None) -> int:
         from .group import group_all
 
         print("group:", group_all(conn))
+    elif args.cmd == "classify":
+        from .classify import classify_all
+
+        print("classify:", classify_all(conn, workers=args.workers))
+    elif args.cmd == "export-spike":
+        import json
+
+        from .export_spike import export_geojson
+
+        data = export_geojson(conn)
+        text = json.dumps(data, ensure_ascii=False)
+        if args.out == "-":
+            print(text)
+        else:
+            Path(args.out).write_text(text)
+            print(f"wrote {args.out}: {len(data['features'])} features, "
+                  f"{len(data['visits'])} visits, {len(data['trips'])} trips")
     elif args.cmd == "stats":
         for (name,) in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"

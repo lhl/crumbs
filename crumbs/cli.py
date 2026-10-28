@@ -54,6 +54,7 @@ def main(argv=None) -> int:
     p_ask.add_argument("question")
     p_ask.add_argument("--lat", type=float, default=None)
     p_ask.add_argument("--lon", type=float, default=None)
+    sub.add_parser("demo", help="build the local demo manifest + sufficiency verdict (DEM-01)")
     sub.add_parser("correlate", help="cross-correlate photo visits with location stays")
 
     args = ap.parse_args(argv)
@@ -157,6 +158,12 @@ def main(argv=None) -> int:
         result = ask(conn, args.question, lat=args.lat, lon=args.lon)
         print(result["answer"])
         print("[evidence:", result["evidence"], "| status:", result["status"] + "]")
+    elif args.cmd == "demo":
+        from .demo import build_demo_manifest
+
+        out = build_demo_manifest(conn)
+        print("verdict:", out["verdict"])
+        print("manifest written to data/demo/manifest.json (local only)")
     elif args.cmd == "correlate":
         from .locations import correlate
 

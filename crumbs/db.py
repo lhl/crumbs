@@ -45,6 +45,27 @@ CREATE TABLE IF NOT EXISTS extractions (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     provenance TEXT NOT NULL DEFAULT 'inferred'
 );
+CREATE TABLE IF NOT EXISTS visit_resolutions (
+    id INTEGER PRIMARY KEY,
+    visit_id INTEGER NOT NULL REFERENCES visits(id),
+    top_place_id INTEGER REFERENCES places(id),
+    status TEXT NOT NULL,                -- candidate-strong | candidate-weak | unknown
+    tier TEXT NOT NULL,                  -- strong | medium | weak
+    reasons_json TEXT NOT NULL,          -- scored evidence list; the audit trail
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (visit_id, created_by)
+);
+CREATE TABLE IF NOT EXISTS review_questions (
+    id INTEGER PRIMARY KEY,
+    visit_id INTEGER NOT NULL REFERENCES visits(id),
+    question TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open', -- open | answered | skipped
+    answer TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (visit_id, created_by)
+);
 CREATE TABLE IF NOT EXISTS labels (
     id INTEGER PRIMARY KEY,
     media_id INTEGER NOT NULL REFERENCES media_items(id),

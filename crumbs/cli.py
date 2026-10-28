@@ -49,6 +49,7 @@ def main(argv=None) -> int:
     p_api.add_argument("--port", type=int, default=8770)
     p_api.add_argument("--host", default="127.0.0.1")
     sub.add_parser("score", help="score model output against user labels (DAT-06)")
+    sub.add_parser("reconcile", help="evidence-score visits and build the review queue (REC-02)")
     sub.add_parser("correlate", help="cross-correlate photo visits with location stays")
 
     args = ap.parse_args(argv)
@@ -142,6 +143,10 @@ def main(argv=None) -> int:
         from .score import score_all
 
         print(_json.dumps(score_all(conn), indent=2, ensure_ascii=False))
+    elif args.cmd == "reconcile":
+        from .reconcile import reconcile_all
+
+        print("reconcile:", reconcile_all(conn))
     elif args.cmd == "correlate":
         from .locations import correlate
 

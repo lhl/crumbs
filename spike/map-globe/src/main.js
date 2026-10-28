@@ -2,7 +2,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Protocol } from 'pmtiles';
 import { layers as protomapsLayers, namedFlavor } from '@protomaps/basemaps';
-import { generatePhotos, photoThumb, TRIPS } from './data.js';
+import { generatePhotos, loadRealData, photoThumb, TRIPS } from './data.js';
 
 // Fully-local basemap (PWA-05): one PMTiles archive + local glyphs/sprites, all same-origin.
 // Data is fetched by tools/fetch-tiles.sh into public/ (git-ignored); see README.
@@ -64,8 +64,11 @@ const STYLES = {
   },
 };
 
+// Real corpus wins when /crumbs-data.json exists (git-ignored, produced by
+// `crumbs export-spike`); otherwise the synthetic demo set keeps the spike self-contained.
 let photos = generatePhotos();
 let activeTrip = 'all';
+let realData = false;
 let currentIdx = 0; // index into the *visible, time-ordered* photo list
 let playing = false;
 let playTimer = null;
@@ -247,7 +250,25 @@ $('btn-globe').addEventListener('click', () => setProjection('globe'));
 $('btn-flat').addEventListener('click', () => setProjection('flat'));
 $('style-select').addEventListener('change', (e) => map.setStyle(STYLES[e.target.value]));
 const tripSelect = $('trip-select');
-for (const t of TRIPS) { const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; tripSelect.appendChild(o); }
+function fillTripOptions() {
+  tripSelect.innerHTML = '<option value="all">All trips</option>';
+  for (const t of TRIPS) { const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; tripSelect.appendChild(o); }
+  tripSelect.value = activeTrip;
+}
+fillTripOptions();
+loadRealData().then((real) => {
+  if (!real) return;
+  realData = true;
+  $('btn-stress').style.display = 'none';
+  photos = real;
+  activeTrip = 'all'; currentIdx = 0;
+  fillTripOptions();
+  if (layersReady) {
+    refreshSources();
+    const first = visiblePhotos()[0];
+    if (first) selectPhoto(first.id, { fly: false });
+  }
+});
 tripSelect.addEventListener('change', (e) => {
   activeTrip = e.target.value; currentIdx = 0; refreshSources();
   const list = visiblePhotos();

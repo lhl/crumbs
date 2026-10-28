@@ -4,4 +4,7 @@ dist/
 public/tiles/
 public/fonts/
 public/sprites/
+# Real corpus export + thumbnails (personal data; produced locally by `crumbs export-spike`)
+public/crumbs-data.json
+public/photos/
 tools/bin/

@@ -1,7 +1,7 @@
 // Synthetic spike data — invented places/photos, real city-scale coordinates only.
 // No personal data: names, dishes, and photos are generated placeholders.
 
-const TRIPS = [
+let TRIPS = [
   {
     id: 'kyoto',
     name: 'Kyoto — food trip (synthetic)',
@@ -91,11 +91,52 @@ export function generatePhotos({ stress = 0 } = {}) {
 }
 
 export function photoThumb(p, size = 56) {
+  if (p.img) return p.img; // real corpus: local analysis JPEG served from /photos/<id>.jpg
   // Inline SVG placeholder: stands in for a local thumbnail file in the real product.
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'>` +
     `<rect width='100%' height='100%' fill='hsl(${p.hue} 65% 72%)'/>` +
     `<text x='50%' y='58%' font-size='${size * 0.42}' text-anchor='middle'>${p.emoji}</text></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const TRIP_COLORS = ['#e4572e', '#2a9d8f', '#4361ee', '#f4a261', '#8338ec', '#06d6a0', '#ef476f', '#118ab2'];
+const EMOJI_ALL = { food: '🍽️', sightseeing: '📷', trip: '🧭', personal: '🏠', unknown: '❔', unclassified: '📍' };
+
+// Real corpus mode: /crumbs-data.json is produced by `crumbs export-spike`
+// (photo points + visits + trips from the local evidence store) and the
+// analysis thumbnails by copying data/crumbs/analysis files to /photos/.
+// Both are git-ignored personal data; when the file is absent the spike
+// falls back to the synthetic set above.
+export async function loadRealData() {
+  try {
+    const resp = await fetch('/crumbs-data.json');
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!data.features?.length) return null;
+    TRIPS = data.trips.map((t, i) => ({
+      id: `trip-${t.id}`,
+      name: `Trip ${t.started_at.slice(0, 10)} → ${t.ended_at.slice(0, 10)}`,
+      color: TRIP_COLORS[i % TRIP_COLORS.length],
+    }));
+    const photos = data.features.map((f) => {
+      const p = f.properties;
+      const cat = p.category || 'unclassified';
+      return {
+        id: `m${p.media_id}`,
+        tripId: p.trip_id != null ? `trip-${p.trip_id}` : 'unassigned',
+        lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1],
+        time: Date.parse(p.captured_at.replace(' ', 'T')),
+        title: p.rel_path.split('/').pop(),
+        category: cat, emoji: EMOJI_ALL[cat] || '📍',
+        hue: (p.media_id * 47) % 360,
+        img: `/photos/${p.media_id}.jpg`,
+        visitId: p.visit_id,
+      };
+    }).filter((p) => Number.isFinite(p.time));
+    return photos.sort((a, b) => a.time - b.time);
+  } catch {
+    return null;
+  }
 }
 
 export { TRIPS };

@@ -79,5 +79,9 @@ Not free (for contrast): Mapbox and MapTiler's hosted tiers are paid/keyed beyon
 ## Files
 
 - `src/main.js` — map setup, projections, clustering, trails, playback, FPS meter; `window.__spikeMap` is exposed for debugging.
-- `src/data.js` — deterministic synthetic dataset generator (+ stress mode).
+- `src/data.js` — deterministic synthetic dataset generator (+ stress mode) and the real-corpus loader.
+
+## Real corpus mode
+
+When `public/crumbs-data.json` exists (produced by `python3 -m crumbs.cli export-spike` from the local evidence store, with analysis thumbnails copied to `public/photos/<media_id>.jpg`), the spike renders the **real** imported corpus — GPS photo points clustered on the offline globe, per-trip trails/lists, real thumbnails, and Glimmer categories on the cards — and hides the synthetic stress button. Both paths are personal data and git-ignored (`git check-ignore` verified); without them the spike falls back to the synthetic set. Current real-data caveats match the pipeline worklogs: trips are over-merged at sample sparsity, and no accuracy claim attaches to the categories until hand labels exist.
 - `src/style.css`, `index.html` — minimal UI: projection/style/trip controls, photo panel, timeline scrubber.

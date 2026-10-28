@@ -45,13 +45,17 @@ def import_wanderings(conn, path: Path) -> dict:
         lon, lat = f["geometry"]["coordinates"]
         p = f["properties"]
         rows.append((int(p["ts"]), _iso(int(p["ts"])), lat, lon, p.get("acc"), import_id))
+    # Dedupe on (ts, lat, lon) — the same key the Muse-side ingest tool
+    # uses — so re-importing an overlapping export is a no-op for old points.
+    before = conn.execute("SELECT COUNT(*) FROM location_records").fetchone()[0]
     conn.executemany(
-        "INSERT INTO location_records (ts_ms, recorded_at, lat, lon, accuracy_m, import_id, source) "
+        "INSERT OR IGNORE INTO location_records (ts_ms, recorded_at, lat, lon, accuracy_m, import_id, source) "
         "VALUES (?, ?, ?, ?, ?, ?, 'wanderings')",
         rows,
     )
     conn.commit()
-    return {"points": len(rows), "import_id": import_id}
+    after = conn.execute("SELECT COUNT(*) FROM location_records").fetchone()[0]
+    return {"points_in_file": len(rows), "new_points": after - before, "import_id": import_id}
 
 
 def haversine_m(lat1, lon1, lat2, lon2) -> float:

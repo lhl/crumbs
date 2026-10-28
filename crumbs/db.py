@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS tz_estimates (
     created_by TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_loc_dedupe ON location_records(ts_ms, lat, lon);
 CREATE INDEX IF NOT EXISTS idx_loc_ts ON location_records(ts_ms);
 CREATE INDEX IF NOT EXISTS idx_places_name ON places(name);
 CREATE INDEX IF NOT EXISTS idx_media_captured ON media_items(captured_at);

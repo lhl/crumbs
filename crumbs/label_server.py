@@ -69,29 +69,47 @@ PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="wi
  <img id="photo" alt="">
  <div id="suggest"></div>
  <div class="row" id="cats"></div>
+ <p class="muted">Category = the scene. Definitions: <b>sightseeing</b> landmark/viewpoint/tourist spot · <b>trip</b> away-from-home travel context (transit, hotel, street abroad, restaurant while traveling) · <b>personal</b> everyday life at home/locally (people, home, everyday objects/restaurants — <i>not</i> 'private') · <b>food</b> dish or meal · <b>other</b> you know what it is but it fits none (object/tchotchke, screenshot, document, pet). 'unknown' is the model's word for abstaining — humans label <b>other</b> instead.</p>
+ <div class="muted">Evidence present (tap to toggle; menu/receipt photos are usually category <b>food</b> + that evidence):</div>
+ <div class="row" id="evs"></div>
+ <label>New evidence labels (comma-separated, created as needed)<input id="evnew" placeholder="e.g. pet, screenshot, ticket"></label>
  <label>Dishes (comma-separated, if any)<input id="dishes" placeholder="e.g. grilled fish set, tonkotsu ramen"></label>
  <label>Place name (if you know it)<input id="place" placeholder="e.g. Yudofu Sagana"></label>
  <div class="row">
    <button class="good" id="save">Save + next (Enter)</button>
    <button id="skip">Skip (s)</button>
  </div>
- <p class="muted">Keys: 1 sightseeing · 2 trip · 3 personal · 4 food · 5 unknown · click a category to select, Enter saves. Selecting the shown category = confirming the model.</p>
+ <p class="muted">Keys: 1 sightseeing · 2 trip · 3 personal · 4 food · 5 other · click a category to select, Enter saves. Selecting the shown category = confirming the model. A menu photo = food + menu evidence; a tchotchke at a restaurant = trip (if traveling) or personal (if local) + interior evidence.</p>
 </div>
 <script>
-let cur = null, chosen = null;
-const CATS = ['sightseeing','trip','personal','food','unknown'];
+let cur = null, chosen = null, evSel = new Set();
+const CATS = ['sightseeing','trip','personal','food','other'];
+const EVS = ['dish','menu','receipt','sign','storefront','interior','lodging','landmark','people','nature','document','other'];
+function modelCategory(c) { return CATS.includes(c) ? c : 'other'; }
 async function next() {
   const r = await fetch('/api/next'); const d = await r.json();
   document.getElementById('prog').textContent = `— ${d.labeled} labeled / ${d.total} total`;
   if (!d.item) { document.getElementById('meta').textContent = 'Queue empty. Done!'; document.getElementById('photo').src=''; return; }
-  cur = d.item; chosen = cur.category;
+  cur = d.item; chosen = modelCategory(cur.category);
+  evSel = new Set(cur.evidence_types || []);
   document.getElementById('photo').src = '/img/' + cur.media_id + '.jpg';
   document.getElementById('meta').textContent = `#${cur.media_id} · ${cur.captured_at || 'no time'} · ${cur.rel_path}`;
   document.getElementById('suggest').innerHTML =
     `<p>Model: <b>${cur.category}</b> · evidence: ${(cur.evidence_types||[]).join(', ') || '—'}` +
     (cur.candidates?.length ? `<br>Place candidates: ${cur.candidates.map(c=>`${c.name} (${Math.round(c.distance_m)}m)`).join(' · ')}` : '') + `</p>`;
   document.getElementById('dishes').value = ''; document.getElementById('place').value = '';
-  renderCats();
+  document.getElementById('evnew').value = '';
+  renderCats(); renderEvs();
+}
+function renderEvs() {
+  const el = document.getElementById('evs'); el.innerHTML = '';
+  [...new Set([...EVS, ...evSel])].forEach(ev => {
+    const b = document.createElement('button');
+    b.textContent = ev;
+    if (evSel.has(ev)) b.className = 'good';
+    b.onclick = () => { evSel.has(ev) ? evSel.delete(ev) : evSel.add(ev); renderEvs(); };
+    el.appendChild(b);
+  });
 }
 function renderCats() {
   const el = document.getElementById('cats'); el.innerHTML = '';
@@ -105,7 +123,8 @@ function renderCats() {
 }
 async function save() {
   if (!cur) return;
-  const body = { media_id: cur.media_id, category: chosen,
+  const extra = document.getElementById('evnew').value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  const body = { media_id: cur.media_id, category: chosen, evidence: [...new Set([...evSel, ...extra])],
     dishes: document.getElementById('dishes').value.split(',').map(s=>s.trim()).filter(Boolean),
     place: document.getElementById('place').value.trim() };
   await fetch('/api/label', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
@@ -206,6 +225,9 @@ def make_handler(conn):
             mid = int(data["media_id"])
             conn.execute("INSERT INTO labels (media_id, field, value, source) VALUES (?, 'category', ?, 'user')",
                          (mid, data["category"]))
+            for ev in data.get("evidence", []):
+                conn.execute("INSERT INTO labels (media_id, field, value, source) VALUES (?, 'evidence', ?, 'user')",
+                             (mid, str(ev).strip().lower()))
             for dish in data.get("dishes", []):
                 conn.execute("INSERT INTO labels (media_id, field, value, source) VALUES (?, 'dish', ?, 'user')",
                              (mid, dish))

@@ -2,7 +2,7 @@
 
 Every model in the stack: size, precision, engine, memory, and measured per-item cost. This is the presentation reference; claims here must stay reproducible from worklog entries.
 
-**Reference hardware (all measurements unless noted):** `zbook` — AMD Ryzen AI Max (Strix Halo), Radeon 8060S iGPU (gfx1151), 125 GB unified memory, CachyOS. Three identical Strix Halo APU boxes (Ryzen AI MAX+ 395, Radeon 8060S/gfx1151, 125 GB unified) are in use: `zbook` (Glimmer serving), `strixhalo` (SAM/PE runs), and `gfx1151` (DE-2.1 GGUF serving), so model arms run in parallel without interrupting each other. Models marked *planned* are design targets, not measurements; published figures for them are labeled as such. Last updated 2026-11-01.
+**Reference hardware (all measurements unless noted):** `zbook` — AMD Ryzen AI Max (Strix Halo), Radeon 8060S iGPU (gfx1151), 125 GB unified memory, CachyOS. Three identical Strix Halo APU boxes (Ryzen AI MAX+ 395, Radeon 8060S/gfx1151, 125 GB unified) are in use: `zbook` (Glimmer serving), `strixhalo` (SAM/PE runs), and `gfx1151` (DE-2.1 GGUF serving; offline since 2026-11-01, no physical access). A fourth machine, `dev` (4x RTX PRO 6000 Blackwell, 96 GB each, 219 GB RAM), serves Glimmer FP8 under vLLM and hosts the fast Glimmer-DE read (0.03-0.5 s/read with prefix caching vs 2.69 s on llama.cpp); see worklog 20261101T150639. Models marked *planned* are design targets, not measurements; published figures for them are labeled as such. Last updated 2026-11-01.
 
 ## Measured and in use
 

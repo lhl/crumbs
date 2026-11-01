@@ -89,8 +89,9 @@ PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="wi
    <label>Dishes (comma-separated, if any)<input id="dishes" placeholder="e.g. grilled fish set, tonkotsu ramen"></label>
    <label>Place name (if you know it)<input id="place" placeholder="e.g. Yudofu Sagana"></label>
    <div class="row">
+     <button id="back">\u2190 Back</button>
      <button class="good" id="save">Save + next (Enter)</button>
-     <button id="skip">Skip (s)</button>
+     <button id="skip">Skip (s / \u2192)</button>
    </div>
    <details><summary class="muted">Definitions &amp; examples</summary>
    <p class="muted">Category = the scene: <b>sightseeing</b> landmark/viewpoint/tourist spot · <b>trip</b> away-from-home travel context (transit, hotel, street abroad, restaurant while traveling) · <b>personal</b> everyday life at home/locally (people, home, everyday objects/restaurants — <i>not</i> 'private') · <b>food</b> dish or meal · <b>other</b> you know what it is but it fits none (object/tchotchke, screenshot, document, pet). 'unknown' is the model's word for abstaining — humans label <b>other</b> instead. A menu photo = food + menu evidence; a tchotchke at a restaurant = trip (if traveling) or personal (if local) + interior evidence. Selections start from the model's suggestion and stay highlighted until you change them.</p>
@@ -100,18 +101,19 @@ PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="wi
 </div>
 <script>
 let cur = null, chosen = null, evSel = new Set();
+let hist = [], hidx = -1;  // visited media_ids, for Back/Forward
 const CATS = ['sightseeing','trip','personal','food','other'];
 const EVS = ['dish','menu','receipt','sign','storefront','interior','lodging','landmark','people','nature','document','other'];
 const EVKEYS = {dish:'d',menu:'m',receipt:'c',sign:'g',storefront:'t',interior:'i',lodging:'h',landmark:'k',people:'p',nature:'n',document:'o',other:'x'};
 function modelCategory(c) { return CATS.includes(c) ? c : 'other'; }
-async function next() {
-  const r = await fetch('/api/next'); const d = await r.json();
+function show(d) {
   document.getElementById('prog').textContent = `— ${d.labeled} labeled / ${d.total} total`;
   if (!d.item) { document.getElementById('meta').textContent = 'Queue empty. Done!'; document.getElementById('photo').src=''; return; }
-  cur = d.item; chosen = modelCategory(cur.category);
-  evSel = new Set(cur.evidence_types || []);
+  cur = d.item;
+  chosen = cur.user_category ? modelCategory(cur.user_category) : modelCategory(cur.category);
+  evSel = new Set(cur.user_category ? (cur.user_evidence || []) : (cur.evidence_types || []));
   document.getElementById('photo').src = '/img/' + cur.media_id + '.jpg';
-  document.getElementById('meta').textContent = `#${cur.media_id} · ${cur.captured_at || 'no time'} · ${cur.rel_path}`;
+  document.getElementById('meta').textContent = `#${cur.media_id} · ${cur.captured_at || 'no time'} · ${cur.rel_path}` + (cur.user_category ? ` · your label: ${cur.user_category} (saving overwrites)` : '');
   document.getElementById('suggest').innerHTML =
     `<p>Model: <b>${cur.category}</b> · evidence: ${(cur.evidence_types||[]).join(', ') || '—'}` +
     (cur.candidates?.length ? `<br>Place candidates: ${cur.candidates.map(c=>`${c.name} (${Math.round(c.distance_m)}m)`).join(' · ')}` : '') + `</p>`;
@@ -139,6 +141,21 @@ function renderCats() {
     el.appendChild(b);
   });
 }
+async function advance() {
+  if (hidx < hist.length - 1) {
+    hidx++;
+    const r = await fetch('/api/item/' + hist[hidx]); show(await r.json()); return;
+  }
+  const r = await fetch('/api/next?exclude=' + hist.join(',')); const d = await r.json();
+  if (d.item) { hist.push(d.item.media_id); hidx = hist.length - 1; }
+  show(d);
+}
+async function back() {
+  if (hidx <= 0) return;
+  hidx--;
+  const r = await fetch('/api/item/' + hist[hidx]); show(await r.json());
+}
+async function next() { advance(); }
 async function save() {
   if (!cur) return;
   const extra = document.getElementById('evnew').value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
@@ -146,15 +163,18 @@ async function save() {
     dishes: document.getElementById('dishes').value.split(',').map(s=>s.trim()).filter(Boolean),
     place: document.getElementById('place').value.trim() };
   await fetch('/api/label', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  next();
+  advance();
 }
 document.getElementById('save').onclick = save;
-document.getElementById('skip').onclick = next;
+document.getElementById('skip').onclick = advance;
+document.getElementById('back').onclick = back;
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') { if (e.key === 'Enter') save(); return; }
   const i = ['1','2','3','4','5'].indexOf(e.key);
   if (i >= 0) { chosen = CATS[i]; renderCats(); return; }
   if (e.key === 'Enter') { save(); return; }
+  if (e.key === 'ArrowRight') { advance(); return; }
+  if (e.key === 'ArrowLeft') { back(); return; }
   if (e.key === 's') { next(); return; }
   const ev = Object.keys(EVKEYS).find(k => EVKEYS[k] === e.key.toLowerCase());
   if (ev) { evSel.has(ev) ? evSel.delete(ev) : evSel.add(ev); renderEvs(); }
@@ -163,17 +183,57 @@ next();
 </script>"""
 
 
-def _queue(conn):
-    return conn.execute(
-        """SELECT m.id AS media_id, m.rel_path, m.captured_at, m.content_hash,
+_ITEM_SQL = """SELECT m.id AS media_id, m.rel_path, m.captured_at, m.content_hash,
                   json_extract(c.labels_json, '$.category') AS category,
                   json_extract(c.labels_json, '$.evidence_types') AS evidence_types
            FROM media_items m
-           LEFT JOIN classifications c ON c.id = (SELECT MAX(id) FROM classifications WHERE media_id = m.id)
+           LEFT JOIN classifications c ON c.id = (SELECT MAX(id) FROM classifications WHERE media_id = m.id)"""
+
+
+def _queue(conn, exclude=()):
+    rows = conn.execute(
+        _ITEM_SQL + """
            WHERE NOT EXISTS (SELECT 1 FROM labels l WHERE l.media_id = m.id AND l.field = 'category')
            ORDER BY CASE json_extract(c.labels_json, '$.category')
                       WHEN 'food' THEN 0 WHEN 'unknown' THEN 1 ELSE 2 END, m.id"""
     ).fetchall()
+    excl = {int(x) for x in exclude}
+    return [r for r in rows if r["media_id"] not in excl]
+
+
+def _build_item(conn, row):
+    r = dict(row)
+    r["evidence_types"] = json.loads(r["evidence_types"]) if r["evidence_types"] else []
+    (visit_id,) = conn.execute(
+        "SELECT visit_id FROM visit_media WHERE media_id = ?", (r["media_id"],)
+    ).fetchone() or (None,)
+    cands = []
+    if visit_id is not None:
+        cands = [dict(x) for x in conn.execute(
+            """SELECT p.name, vc.distance_m, vc.evidence FROM visit_place_candidates vc
+               JOIN places p ON p.id = vc.place_id WHERE vc.visit_id = ?
+               ORDER BY vc.distance_m LIMIT 6""", (visit_id,))]
+    r["candidates"] = cands
+    # Latest user labeling pass, so Back can show (and correct) prior labels.
+    user = conn.execute(
+        "SELECT field, value FROM labels WHERE media_id = ? AND source = 'user' ORDER BY id",
+        (r["media_id"],),
+    ).fetchall()
+    r["user_category"] = None
+    r["user_evidence"] = []
+    for field, value in user:
+        if field == "category":
+            r["user_category"] = value
+            r["user_evidence"] = []
+        elif field == "evidence":
+            r["user_evidence"].append(value)
+    return r
+
+
+def _counts(conn):
+    (total,) = conn.execute("SELECT COUNT(*) FROM media_items").fetchone()
+    (labeled,) = conn.execute("SELECT COUNT(DISTINCT media_id) FROM labels WHERE field = 'category'").fetchone()
+    return labeled, total
 
 
 def make_handler(conn):
@@ -214,26 +274,25 @@ def make_handler(conn):
                 self.send_header("ETag", etag)
                 self.end_headers()
                 self.wfile.write(body)
-            elif self.path == "/api/next":
-                q = _queue(conn)
-                (total,) = conn.execute("SELECT COUNT(*) FROM media_items").fetchone()
-                (labeled,) = conn.execute("SELECT COUNT(DISTINCT media_id) FROM labels WHERE field = 'category'").fetchone()
+            elif self.path.startswith("/api/item/"):
+                media_id = int(self.path.split("/")[3])
+                row = conn.execute(_ITEM_SQL + " WHERE m.id = ?", (media_id,)).fetchone()
+                labeled, total = _counts(conn)
+                if row is None:
+                    self._json({"item": None, "labeled": labeled, "total": total})
+                    return
+                self._json({"item": _build_item(conn, row), "labeled": labeled, "total": total})
+            elif self.path.startswith("/api/next"):
+                from urllib.parse import parse_qs, urlparse
+
+                qs = parse_qs(urlparse(self.path).query)
+                exclude = [x for x in qs.get("exclude", [""])[0].split(",") if x.strip().isdigit()]
+                q = _queue(conn, exclude)
+                labeled, total = _counts(conn)
                 if not q:
                     self._json({"item": None, "labeled": labeled, "total": total})
                     return
-                r = dict(q[0])
-                r["evidence_types"] = json.loads(r["evidence_types"]) if r["evidence_types"] else []
-                (visit_id,) = conn.execute(
-                    "SELECT visit_id FROM visit_media WHERE media_id = ?", (r["media_id"],)
-                ).fetchone() or (None,)
-                cands = []
-                if visit_id is not None:
-                    cands = [dict(x) for x in conn.execute(
-                        """SELECT p.name, vc.distance_m, vc.evidence FROM visit_place_candidates vc
-                           JOIN places p ON p.id = vc.place_id WHERE vc.visit_id = ?
-                           ORDER BY vc.distance_m LIMIT 6""", (visit_id,))]
-                r["candidates"] = cands
-                self._json({"item": r, "labeled": labeled, "total": total})
+                self._json({"item": _build_item(conn, q[0]), "labeled": labeled, "total": total})
             else:
                 self.send_error(404)
 

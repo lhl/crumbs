@@ -22,7 +22,8 @@ Glimmer has **no integrated MTP head**. Its speed companion is the separate **DF
 
 | Model | Intended role | Published size (not our measurement) | Precision / engine planned | Status |
 |---|---|---|---|---|
-| Perception Encoder (PE-Core) | Zero-shot taxonomy classification + text-query image retrieval (E1 comparator vs DINOv3 head) | Checkpoint-dependent (Tiny→Giant) | Apache 2.0 weights; PyTorch | Not run yet (EMB-02) |
+| Perception Encoder (PE-Core) | Zero-shot taxonomy classification + text-query image retrieval (E1 comparator vs DINOv3 head) | L14-336: 0.32B vision, 2.6 GB checkpoint; G14-448: 1.88B vision, 9.1 GB | Apache 2.0 weights; PyTorch via `perception_models` | **Measured 2026-11-01 on strixhalo over 440 photos: L = 0.138 s/photo (3.72 GB peak), G = 1.882 s/photo (13.10 GB peak); category agreement with Glimmer 44.3% (L) / 43.2% (G) — agreement, not accuracy (no labels yet); see worklog 20261101T095719** |
+| Shisa DE-2.1 (comparator, not shipped) | Restricted-readout decision model (Gemma 4 26B A4B + LoRA soup, Apache 2.0): the pattern reference for a future Glimmer-DE; also an E1/E2b comparator | 25.8B BF16 (51.6 GB); Q4_K_M GGUF 16.8 GB | Hosted Shisa API for the measured arm; llama.cpp GGUF locally (arm in progress on the gfx1151 box) | **API arm measured 2026-11-01 over 440 photos (development-only, photos sent to the API by lead decision): category agreement with Glimmer 68.0%, mean 2.89 s/photo wall at 4 concurrent workers for 9 questions/photo. Local GGUF arm pending** |
 | Perception Language Model (PLM-3B / 8B) | High-volume extraction comparator; possible Glimmer-DE distillation target (System-1) | 3B / 8B class | FAIR Research License; PyTorch (HF) | Not run yet (EXT-02, GDE-07) |
 | Glimmer-DE (ours to build) | Calibrated System-1 decision layer: LoRA on Glimmer + restricted-logprob readout | Base = Glimmer above + LoRA adapter (rank 16) | LoRA (Axolotl/TRL), vision tower frozen; readout via llama.cpp/vLLM logprobs | Feasibility probes not run yet (GDE-01); per-photo prefill (~1,131 tok at ~88 tok/s full-res, ~20 s at 1024 px) is the cost to design around |
 | Muse Glimmer bf16 on RTX PRO 6000 | Reference-hardware serving arm (vLLM vs SGLang) | bf16 ≈60 GB weights, ≈72 GB VRAM to serve (vendor figures) | bf16; vLLM/SGLang (CUDA) | Deferred by lead decision (GLM-01/02); the zbook triage numbers above are the comparison baseline |
@@ -39,4 +40,4 @@ Glimmer has **no integrated MTP head**. Its speed companion is the separate **DF
 
 ## Sources
 
-Measurements: worklogs 20261027T203902 (Glimmer/zbook), 20261027T210818 (SAM/DINOv3), 20261027T214029 (embeddings), 20261028T002750 (triage rates), 20261028T043838 (places). Catalog facts and license status: [DISCOVERY.md](DISCOVERY.md).
+Measurements: worklogs 20261027T203902 (Glimmer/zbook), 20261027T210818 (SAM/DINOv3), 20261027T214029 (embeddings), 20261028T002750 (triage rates), 20261028T043838 (places), 20261101T082831 (SAM batch), 20261101T095719 (PE/DE agreement). Catalog facts and license status: [DISCOVERY.md](DISCOVERY.md).

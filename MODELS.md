@@ -20,7 +20,7 @@ The `dev` box (4x RTX PRO 6000 Blackwell, 96 GB each) joined on 2026-11-01 as th
 
 | Pass | Strix Halo (APU, llama.cpp / ROCm PyTorch) | PRO 6000 (`dev`, vLLM / CUDA PyTorch) |
 | --- | --- | --- |
-| Glimmer generative triage (1024 px) | 19.4 s (zbook, Q4_K_M GGUF) | not yet measured (FP8 server up; generative timing is a TODO) |
+| Glimmer generative triage | 19.4 s/photo (zbook, Q4_K_M GGUF, 1024 px, single slot) | ~0.30 s/photo per replica at c=16 (FP8, 640 px previews; 9,669 photos in ~12 min across 4 replicas). On the 440 labeled photos: food F1 0.930 vs the zbook run's 0.976 at equal recall (0.984); category agreement between the two runs 79.3%. Note: vLLM guided-JSON output intermittently pads to the token cap instead of stopping, so most dev outputs were recovered from the JSON prefix (category unaffected, evidence may truncate) |
 | Glimmer-DE restricted read (640 px) | 2.69 s (zbook llama.cpp, single read) | 0.19 s at concurrency 1 (1024 px); ~12.7 photos/s aggregate at c=16 on 640 px previews across one replica — throughput is vision-encoder bound and flat in client concurrency (c=1..64 at 1024 px: 5.0-5.4 req/s) |
 | SAM 3.1, 5 evidence prompts | 2.83 s (strixhalo, 1024 px) | ~0.24 s per server (640 px; 3 servers on GPU1-3 aggregate ~12.6 photos/s) |
 | PE-Core-L14 zero-shot | 0.116-0.138 s (strixhalo, batch 32) | single-image smoke only (2.9 s including load); no batch rate yet |

@@ -126,6 +126,16 @@ def track_position_at(track, ts_list, ts_ms):
 TZ_ALGO = "tz-v1(track-match,hourly)"
 
 
+def _epoch_ms(ts: str) -> int:
+    """Epoch ms for a stored timestamp. Offset-aware strings carry their
+    own instant; naive strings keep the module's face-value-UTC assumption
+    (the tz estimator then searches whole-hour offsets around it)."""
+    t = datetime.fromisoformat(ts)
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=timezone.utc)
+    return int(t.timestamp() * 1000)
+
+
 def estimate_timezones(conn) -> dict:
     """IMP-03 via the track: for each GPS+time photo, find the whole-hour UTC
     offset that puts the interpolated track position closest to the photo's
@@ -136,12 +146,12 @@ def estimate_timezones(conn) -> dict:
     ts_list = [p[0] for p in track]
     photos = conn.execute(
         "SELECT id, captured_at, gps_lat, gps_lon FROM media_items "
-        "WHERE gps_lat IS NOT NULL AND captured_at IS NOT NULL"
+        "WHERE gps_lat IS NOT NULL AND captured_at IS NOT NULL AND captured_at != ''"
     ).fetchall()
     conn.execute("DELETE FROM tz_estimates WHERE created_by = ?", (TZ_ALGO,))
     hist, within = Counter(), 0
     for p in photos:
-        base_ms = int(datetime.fromisoformat(p["captured_at"]).replace(tzinfo=timezone.utc).timestamp() * 1000)
+        base_ms = _epoch_ms(p["captured_at"])
         best_h, best_d = None, float("inf")
         for h in range(-12, 15):
             pos = track_position_at(track, ts_list, base_ms - h * 3600_000)
@@ -176,7 +186,11 @@ def correlate(conn) -> dict:
     stays = conn.execute("SELECT id, started_at, ended_at, center_lat, center_lon FROM stays").fetchall()
 
     def parse(s):
-        return datetime.fromisoformat(s)
+        t = datetime.fromisoformat(s)
+        # Visits inherit photo timestamp strings (mixed aware/naive in the
+        # 2025/2026 corpus); stays are naive UTC. Normalize both to aware
+        # UTC so window arithmetic never mixes the two.
+        return t if t.tzinfo is not None else t.replace(tzinfo=timezone.utc)
 
     # Convert each visit's camera-local window to UTC using its photos'
     # median tz estimate (fallback: face value, which understates matches).
@@ -214,12 +228,12 @@ def correlate(conn) -> dict:
     photos = conn.execute(
         "SELECT m.captured_at, m.gps_lat, m.gps_lon, tz.offset_hours FROM media_items m "
         "LEFT JOIN tz_estimates tz ON tz.media_id = m.id "
-        "WHERE m.gps_lat IS NOT NULL AND m.captured_at IS NOT NULL"
+        "WHERE m.gps_lat IS NOT NULL AND m.captured_at IS NOT NULL AND m.captured_at != ''"
     ).fetchall()
     agree = within = 0
     for p in photos:
         off = p["offset_hours"] or 0
-        base_ms = int(datetime.fromisoformat(p["captured_at"]).replace(tzinfo=timezone.utc).timestamp() * 1000)
+        base_ms = _epoch_ms(p["captured_at"])
         pos = track_position_at(track, ts_list, base_ms - off * 3600_000)
         if pos is None:
             continue

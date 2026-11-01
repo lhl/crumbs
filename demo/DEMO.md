@@ -59,9 +59,44 @@ The corpus owner labeled all 440 photos by hand. Outside food, most labels confi
 
 PE's low recall is a calibration failure, not missing signal: its 'unknown' prompt wins the five-way argmax on most true-food photos, while food is still its top non-unknown category on 45 of 61. Thresholding the food probability at 0.1 lifts PE-L to F1 ≈ 0.64 — better, still below DE-2.1. One caveat applies to every recall in this table: a food photo that no system flagged, and the owner therefore never inspected, would be invisible here, so recalls are upper bounds.
 
-## How each model is used, and why
+## Full processing pipeline (as built)
 
-The pipeline assigns each model the job its measurements support, cheapest first. A photo flows through the stages in this order; later, slower stages run only where earlier ones say the photo earns it.
+This is the pipeline that exists in the `crumbs` package today and processed the sample corpus end to end. Every stage is a `crumbs` subcommand; stages with no model are deterministic code.
+
+| # | Stage | Command | Model / engine | Box |
+| --- | --- | --- | --- | --- |
+| 1 | Photo import | `import-photos` | exiftool (EXIF time/GPS) + ImageMagick (1024 px analysis copies); SHA-256 dedupe; originals untouched | strixhalo |
+| 2 | Location import | `import-locations`, `stays`, `tz`, `correlate` | Wanderings location export → dwell stays, camera-timezone estimates, photo↔stay correlation | strixhalo |
+| 3 | Embed | `embed` | DINOv3 ViT-L/16 (PyTorch/ROCm); vectors stored in SQLite | zbook / strixhalo |
+| 4 | Classify | `classify` | Muse Glimmer 30B (Q4_K_M GGUF + vision projector + DFlash draft) via llama.cpp: category + evidence types as generated JSON, 19.4 s/photo | zbook |
+| 5 | Group | `group` | Deterministic time/GPS grouping into visits and trips | any |
+| 6 | Extract | `extract` | Glimmer long-form reads, only on food/evidence photos: full text transcription, dish and place-name candidates; place names matched to nearby registry places (signage evidence) | zbook |
+| 7 | Place candidates | `places-fetch`, `nearby`, `place-search` | OpenStreetMap Overpass at development time, cached in SQLite; per-visit candidates ranked check-in > signage text > GPS proximity | strixhalo |
+| 8 | Reconcile | `reconcile` | Evidence scoring over visits; builds the review queue of targeted questions | any |
+| 9 | Ask / serve | `ask`, `serve` | Evidence-linked answers over the local index, every claim tied to its records; read-only local API | strixhalo + zbook |
+| 10 | Label / score | `label`, `score` | Human labeling UI (phone-friendly) and scoring of model output against those labels | strixhalo |
+
+Everything runs on the three local Strix Halo boxes (each: Ryzen AI MAX+ 395, Radeon 8060S, 125 GB unified memory). No photo, location record, or derived result leaves these machines in the built pipeline.
+
+## Also reviewed (measured, not in the built pipeline)
+
+These models were downloaded, run over the same 440 photos, and scored — then deliberately left out of the pipeline for the reasons given. They are the comparison set behind the role assignments in the next section, and the presentation can show them as the evaluated alternatives.
+
+| Candidate | What we measured | Verdict |
+| --- | --- | --- |
+| SAM 3.1 (bf16, local) | Ran over all 440 photos with 5 evidence prompts (sign/menu/receipt/dish/storefront): 2.83 s/photo, 47.3% of photos hit at least one prompt; masks visually verified | Promising evidence pre-filter and crop source for extraction; not integrated — whether its crops improve Glimmer's reading (the EXT-04 test) is still unmeasured |
+| PE-Core-L14-336 (zero-shot, local) | 0.138 s/photo; category agreement with Glimmer 44.3%; food F1 0.526 (unknown-prompt calibration failure; ≈0.64 with probability thresholding) | Fast enough to be the bulk first pass; needs thresholded probabilities, not argmax, and prompt work before it can route |
+| PE-Core-G14-448 (zero-shot, local) | 1.882 s/photo (13.6x the L model); agreement and food F1 (0.545) essentially unchanged from L | Not used — the extra compute buys nothing on this taxonomy |
+| Shisa DE-2.1 via hosted API | 9 decision questions per photo at 2.89 s/photo wall; category agreement with Glimmer 68.0%; food F1 0.898 | Best non-Glimmer classifier measured; development-only comparator (photos leave the machine), never a product component |
+| Shisa DE-2.1 as local Q4_K_M GGUF | Same questions via llama.cpp on the gfx1151 box: 8.47 s/photo; 92.5% category agreement with the API build; food F1 0.893, best precision (0.980) | Proves a DE-style local classifier is practical and that quantization costs little; its role is the design pattern for a future Glimmer-DE, not a shipped dependency |
+| DE-2.1 on hipEngine | hipEngine (our HIP inference engine) does have a Gemma 4 image tower (added 2026-10-23, validated on gfx1100) and leads llama.cpp on Gemma 4 text prefill (up to 1.59x at 512 tokens); but the DE GGUF's Q5_0 tensors are outside its loader's supported layouts, and the target box's disk was 98% full | Skipped for now by decision; revisit if a supported quantization is produced |
+| Glimmer-DE (ours, not built) | Feasibility only: the llama.cpp server returns token logprobs (verified), which a DE-style restricted read requires; per-question cost on this hardware is prefill-bound | Planned as the shipped System-1 decision layer (IMPLEMENTATION.md GDE); until built, Glimmer's generative read is the classifier |
+| DINOv3 classification head | Embeddings for all 440 exist, but a trained head needs labeled training data; labels only arrived 2026-11-01 | Open; similarity/dedup remains DINOv3's shipped job |
+| Perception Language Model, PE-Lang/Spatial, Meta CLIP 2, SAM FP8 quant | Reviewed on paper in DISCOVERY.md; SAM's third-party FP8 checkpoint was load-tested and silently corrupts weights without torchao wiring | Not run — no measured reason to prefer them over the measured set; the FP8 quant is explicitly not used |
+
+## How each model should be used (the measured assignment)
+
+The built pipeline above uses Glimmer for every reading job. The measurements support a cheaper assignment, which is the direction for the next pipeline revision: each model takes the job its numbers justify, cheapest first, and slower stages run only where earlier ones say the photo earns it. This section is the target state; the two sections before it are what exists and what was evaluated to get here.
 
 | Stage | Model | Job | Why this model |
 | --- | --- | --- | --- |

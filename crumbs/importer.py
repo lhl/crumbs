@@ -30,11 +30,14 @@ def make_analysis_image(src: Path, dest: Path) -> bool:
     if dest.exists():
         return True
     dest.parent.mkdir(parents=True, exist_ok=True)
+    # "[0]" selects the first frame: multi-frame HEICs otherwise make
+    # ImageMagick write dest-0.jpg, dest-1.jpg, ... with returncode 0 and
+    # no dest at all (found on burst exports in the 2025/2026 import).
     r = subprocess.run(
-        ["magick", str(src), "-auto-orient", "-resize", "1024x1024>", "-quality", "85", str(dest)],
+        ["magick", f"{src}[0]", "-auto-orient", "-resize", "1024x1024>", "-quality", "85", str(dest)],
         capture_output=True, text=True,
     )
-    if r.returncode != 0:
+    if r.returncode != 0 or not dest.exists():
         print(f"warn: analysis image failed for {src}: {r.stderr.strip()[:160]}", file=sys.stderr)
         return False
     return True

@@ -14,6 +14,20 @@ Every model in the stack: size, precision, engine, memory, and measured per-item
 
 Also cloned for reference on the processing box: `facebookresearch/sam3`, `facebookresearch/dinov3` (source repos, not runtimes).
 
+## Strix Halo vs PRO 6000 (`dev`) — measured rates for the same passes
+
+The `dev` box (4x RTX PRO 6000 Blackwell, 96 GB each) joined on 2026-11-01 as the fast serving machine. Rates below are per photo for the same model and task on both hardware classes; image size is stated where it differs, because vision-encoder cost scales with it.
+
+| Pass | Strix Halo (APU, llama.cpp / ROCm PyTorch) | PRO 6000 (`dev`, vLLM / CUDA PyTorch) |
+| --- | --- | --- |
+| Glimmer generative triage (1024 px) | 19.4 s (zbook, Q4_K_M GGUF) | not yet measured (FP8 server up; generative timing is a TODO) |
+| Glimmer-DE restricted read (640 px) | 2.69 s (zbook llama.cpp, single read) | 0.19 s at concurrency 1 (1024 px); ~12.7 photos/s aggregate at c=16 on 640 px previews across one replica — throughput is vision-encoder bound and flat in client concurrency (c=1..64 at 1024 px: 5.0-5.4 req/s) |
+| SAM 3.1, 5 evidence prompts | 2.83 s (strixhalo, 1024 px) | ~0.24 s per server (640 px; 3 servers on GPU1-3 aggregate ~12.6 photos/s) |
+| PE-Core-L14 zero-shot | 0.116-0.138 s (strixhalo, batch 32) | single-image smoke only (2.9 s including load); no batch rate yet |
+| DINOv3 ViT-L embedding | ~0.049 s (zbook/strixhalo) | not measured |
+
+Reading: for reading-style passes the PRO 6000 under vLLM is roughly 10-35x the Strix Halo rate, with the multiplier set by how much of the cost is vision encoding versus generation. The Strix Halo boxes remain the always-on local pipeline machines; `dev` is burst capacity that is spun up per pass and pulled down after.
+
 ## The Glimmer speculative-decoding note
 
 Glimmer has **no integrated MTP head**. Its speed companion is the separate **DFlash draft model** (1.63 GB Q4_K_M GGUF above; 4.8 GiB in bf16 as `meta-models/Muse-Glimmer-30B-assistant`), driven by llama.cpp `--spec-type draft-dflash`. Measured draft acceptance: 0.61 median on the triage read (0.13 under 4-way slot contention — single slot is the right configuration on this APU; details in the triage worklog).

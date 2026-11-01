@@ -36,7 +36,9 @@ def embed_all(conn, batch_size: int = 32) -> dict:
     done, t0 = 0, time.time()
     for i in range(0, len(rows), batch_size):
         chunk = rows[i : i + batch_size]
-        imgs = [Image.open(config.ANALYSIS_DIR / f"{r['content_hash']}.jpg") for r in chunk]
+        # convert("RGB"): grayscale-source photos otherwise produce 1-channel
+        # tensors and crash the batch stack (found on the 2025/2026 corpus).
+        imgs = [Image.open(config.ANALYSIS_DIR / f"{r['content_hash']}.jpg").convert("RGB") for r in chunk]
         inputs = proc(images=imgs, return_tensors="pt").to("cuda")
         with torch.no_grad():
             out = model(**inputs).pooler_output.float().cpu()

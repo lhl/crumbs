@@ -42,7 +42,8 @@ def main(argv=None) -> int:
     p_loc.add_argument("path")
     sub.add_parser("stays", help="derive dwell stays from location history")
     sub.add_parser("tz", help="estimate camera UTC offsets by matching photos to the track (IMP-03)")
-    sub.add_parser("extract", help="selective Glimmer extraction over evidence photos (EXT v1)")
+    p_ext = sub.add_parser("extract", help="selective Glimmer extraction over evidence photos (EXT v1)")
+    p_ext.add_argument("--workers", type=int, default=4)
     p_lab = sub.add_parser("label", help="run the local labeling helper UI (DAT-07)")
     p_lab.add_argument("--port", type=int, default=8765)
     p_lab.add_argument("--host", default="127.0.0.1",
@@ -133,7 +134,9 @@ def main(argv=None) -> int:
     elif args.cmd == "extract":
         from .extract import extract_all
 
-        print("extract:", extract_all(conn))
+        stats = extract_all(conn, workers=args.workers)
+        print("extract:", stats)
+        return 1 if stats["failed"] or stats["unattempted"] else 0
     elif args.cmd == "label":
         from .label_server import serve
 

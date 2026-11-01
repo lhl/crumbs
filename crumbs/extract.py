@@ -12,14 +12,16 @@ still does not confirm anything by itself.
 
 import base64
 import json
+import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from difflib import SequenceMatcher
 
 from . import config
 from .classify import MODEL
 from .places import haversine_m
 
-CHECKPOINT = "gguf-q4_k_m+mmproj"
+CHECKPOINT = config.GLIMMER_CHECKPOINT
 ALGO_MATCH = "extract-v1(signage-match)"
 
 SCHEMA = {
@@ -76,15 +78,11 @@ def extraction_targets(conn):
 
 def extract_one(image_path) -> dict:
     b64 = base64.b64encode(image_path.read_bytes()).decode()
-    body = {
-        "messages": [{"role": "user", "content": [
+    body = config.glimmer_body(
+        [{"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
             {"type": "text", "text": PROMPT},
-        ]}],
-        "max_tokens": 1100, "temperature": 0.8, "top_p": 0.95, "top_k": 64,
-        "chat_template_kwargs": {"reasoning_effort": "none"},
-        "response_format": {"type": "json_schema", "schema": SCHEMA},
-    }
+        ]}], 1100, SCHEMA)
     req = urllib.request.Request(
         f"{config.GLIMMER_URL}/v1/chat/completions",
         data=json.dumps(body).encode(), headers={"Content-Type": "application/json"},
@@ -141,24 +139,44 @@ def match_place_names(conn) -> dict:
     return {"signage_matched_candidates": made}
 
 
-def extract_all(conn) -> dict:
+def extract_all(conn, workers: int = 4) -> dict:
+    if workers < 1:
+        raise ValueError("workers must be at least 1")
     targets = extraction_targets(conn)
     done = failed = 0
-    for r in targets:
+
+    def work(r):
         try:
             result = extract_one(config.ANALYSIS_DIR / f"{r['content_hash']}.jpg")
+            return r["id"], result, None, False
         except Exception as e:
-            failed += 1
-            print(f"media {r['id']} failed: {type(e).__name__}: {e}", flush=True)
-            continue
-        conn.execute(
-            "INSERT INTO extractions (media_id, model, checkpoint, data_json, raw_text) VALUES (?, ?, ?, ?, ?)",
-            (r["id"], MODEL, CHECKPOINT, json.dumps(result["parsed"], ensure_ascii=False), result["content"]),
-        )
-        done += 1
-        if done % 5 == 0:
-            conn.commit()
-            print(f"extracted {done}/{len(targets)}", flush=True)
-    conn.commit()
+            unavailable = isinstance(e, (urllib.error.URLError, TimeoutError, ConnectionError))
+            return r["id"], None, f"{type(e).__name__}: {e}", unavailable
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        # Bound queued requests: a lost server must not fail the entire corpus.
+        for offset in range(0, len(targets), workers):
+            unavailable = False
+            for media_id, result, error, lost_server in pool.map(work, targets[offset:offset + workers]):
+                if error is not None:
+                    failed += 1
+                    unavailable |= lost_server
+                    print(f"media {media_id} failed: {error}", flush=True)
+                    continue
+                # Never keep a write transaction open while waiting for a model.
+                with conn:
+                    conn.execute(
+                        "INSERT INTO extractions (media_id, model, checkpoint, data_json, raw_text) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (media_id, MODEL, CHECKPOINT,
+                         json.dumps(result["parsed"], ensure_ascii=False), result["content"]),
+                    )
+                done += 1
+                if done % 20 == 0:
+                    print(f"extracted {done}/{len(targets)}", flush=True)
+            if unavailable:
+                print("Extraction stopped: model server unavailable; rerun to resume.", flush=True)
+                break
     matched = match_place_names(conn)
-    return {"extracted": done, "failed": failed, "targets": len(targets), **matched}
+    return {"extracted": done, "failed": failed, "targets": len(targets),
+            "unattempted": len(targets) - done - failed, **matched}

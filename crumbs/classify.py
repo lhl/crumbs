@@ -1,6 +1,6 @@
 """Glimmer classification/extraction stage: one structured read per photo.
 
-Talks to a local llama-server (GLIMMER_URL) only. The prompt asks for a
+Talks to a local OpenAI-compatible server (GLIMMER_URL) only. The prompt asks for a
 closed category set plus evidence typing and visible text, with explicit
 abstention ("unknown" / empty candidates) — per PLAN, an unknown is a valid
 result and a confident guess is a defect. Responses are stored raw alongside
@@ -16,7 +16,7 @@ from pathlib import Path
 from . import config
 
 MODEL = "muse-glimmer-30b"
-CHECKPOINT = "gguf-q4_k_m+mmproj"
+CHECKPOINT = config.GLIMMER_CHECKPOINT
 
 # Triage read (System-1 shape): deliberately small output. Transcription and
 # dish/place candidate extraction are a separate selective pass over evidence
@@ -89,17 +89,13 @@ def _extract_json(content: str) -> dict:
 
 def classify_one(image_path: Path) -> dict:
     b64 = base64.b64encode(image_path.read_bytes()).decode()
-    body = {
-        "messages": [{"role": "user", "content": [
+    # reasoning_effort=none is measured to cut this read from ~51 s to ~25 s
+    # on text-heavy photos; the template still emits a short reasoning trace.
+    body = config.glimmer_body(
+        [{"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
             {"type": "text", "text": PROMPT},
-        ]}],
-        # reasoning_effort=none is measured to cut this read from ~51 s to ~25 s
-        # on text-heavy photos; the template still emits a short reasoning trace.
-        "max_tokens": 512, "temperature": 0.8, "top_p": 0.95, "top_k": 64,
-        "chat_template_kwargs": {"reasoning_effort": "none"},
-        "response_format": {"type": "json_schema", "schema": SCHEMA},
-    }
+        ]}], 512, SCHEMA)
     req = urllib.request.Request(
         f"{config.GLIMMER_URL}/v1/chat/completions",
         data=json.dumps(body).encode(), headers={"Content-Type": "application/json"},
@@ -130,17 +126,16 @@ def classify_all(conn, workers: int = 4) -> dict:
                 failed += 1
                 print(f"media {media_id} failed: {err}", flush=True)
                 continue
-            conn.execute(
-                "INSERT INTO classifications (media_id, model, checkpoint, labels_json, raw_json) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (media_id, MODEL, CHECKPOINT,
-                 json.dumps(result["parsed"], ensure_ascii=False),
-                 json.dumps({"content_text": result.get("content", ""),
-                             "timings": result["raw"].get("timings", {})}, ensure_ascii=False)),
-            )
+            with conn:
+                conn.execute(
+                    "INSERT INTO classifications (media_id, model, checkpoint, labels_json, raw_json) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (media_id, MODEL, CHECKPOINT,
+                     json.dumps(result["parsed"], ensure_ascii=False),
+                     json.dumps({"content_text": result.get("content", ""),
+                                 "timings": result["raw"].get("timings", {})}, ensure_ascii=False)),
+                )
             done += 1
-            if done % 5 == 0:
-                conn.commit()  # small batches: progress survives a killed client
             if done % 20 == 0:
                 print(f"classified {done}/{len(rows)}", flush=True)
     conn.commit()

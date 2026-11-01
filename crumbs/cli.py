@@ -45,6 +45,8 @@ def main(argv=None) -> int:
     sub.add_parser("extract", help="selective Glimmer extraction over evidence photos (EXT v1)")
     p_lab = sub.add_parser("label", help="run the local labeling helper UI (DAT-07)")
     p_lab.add_argument("--port", type=int, default=8765)
+    p_lab.add_argument("--host", default="127.0.0.1",
+                       help="bind address (use 0.0.0.0 to label from a phone at http://<this-host>:<port>/)")
     p_api = sub.add_parser("serve", help="read-only local API for the Muse bridge (API-01 v1)")
     p_api.add_argument("--port", type=int, default=8770)
     p_api.add_argument("--host", default="127.0.0.1")
@@ -135,8 +137,8 @@ def main(argv=None) -> int:
     elif args.cmd == "label":
         from .label_server import serve
 
-        print(f"labeler at http://127.0.0.1:{args.port}/ (Ctrl-C to stop)")
-        serve(port=args.port)
+        print(f"labeler at http://{args.host}:{args.port}/ (Ctrl-C to stop)")
+        serve(host=args.host, port=args.port)
     elif args.cmd == "serve":
         from .api import serve as api_serve
 

@@ -9,15 +9,51 @@ nothing is overwritten, so label history is itself auditable.
 
 Serves only on localhost by default. This is a data-collection tool for
 the corpus owner, not a product surface.
+
+For phone labeling over a slow link, /img/ serves an optimized preview
+(640 px long edge, quality 68) generated once with ImageMagick into
+CRUMBS_DATA_DIR/previews/, not the 1024 px analysis JPEG. Previews are
+content-addressed by hash, so they are served with immutable caching.
 """
 
 import json
+import subprocess
+import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from . import config, db
 
-PAGE = """<!doctype html><meta charset="utf-8"><title>Crumbs labeler</title>
+PREVIEW_DIR_NAME = "previews"
+PREVIEW_EDGE = 640
+
+
+def preview_path(content_hash: str) -> Path:
+    return config.DATA_DIR / PREVIEW_DIR_NAME / f"{content_hash}.jpg"
+
+
+def ensure_preview(content_hash: str) -> Path:
+    """Return a phone-sized preview of the analysis image, creating it once.
+
+    Falls back to the analysis image itself when ImageMagick is missing
+    or fails, so labeling never breaks over a preview problem.
+    """
+    src = config.ANALYSIS_DIR / f"{content_hash}.jpg"
+    dest = preview_path(content_hash)
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(
+        ["magick", str(src), "-resize", f"{PREVIEW_EDGE}x{PREVIEW_EDGE}>",
+         "-strip", "-quality", "68", str(dest)],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0 or not dest.exists():
+        print(f"warn: preview failed for {content_hash}: {r.stderr.strip()[:160]}", file=sys.stderr)
+        return src
+    return dest
+
+PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Crumbs labeler</title>
 <style>
  body{font-family:system-ui;margin:1rem auto;max-width:860px;padding:0 1rem;background:#111;color:#eee}
  img{max-width:100%;max-height:55vh;border-radius:8px}
@@ -125,11 +161,18 @@ def make_handler(conn):
             elif self.path.startswith("/img/"):
                 media_id = int(self.path.split("/")[2].split(".")[0])
                 (h,) = conn.execute("SELECT content_hash FROM media_items WHERE id = ?", (media_id,)).fetchone()
-                f = config.ANALYSIS_DIR / f"{h}.jpg"
+                f = ensure_preview(h)
+                etag = f'"{h}-{f.stat().st_size}"'
+                if self.headers.get("If-None-Match") == etag:
+                    self.send_response(304)
+                    self.end_headers()
+                    return
                 body = f.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "image/jpeg")
                 self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+                self.send_header("ETag", etag)
                 self.end_headers()
                 self.wfile.write(body)
             elif self.path == "/api/next":

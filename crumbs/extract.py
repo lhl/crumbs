@@ -76,6 +76,23 @@ def extraction_targets(conn):
     return out
 
 
+def validate_extraction(parsed) -> dict:
+    """Reject malformed fields before they can become place/dish evidence."""
+    if not isinstance(parsed, dict) or not all(key in parsed for key in SCHEMA["required"]):
+        raise ValueError("extraction is missing required fields")
+    if not isinstance(parsed["visible_text"], str) or not isinstance(parsed["cannot_determine"], bool):
+        raise ValueError("invalid extraction text or abstention type")
+    for field in ("dish_candidates", "place_name_candidates"):
+        candidates = parsed[field]
+        allowed = SCHEMA["properties"][field]["items"]["properties"]["basis"]["enum"]
+        if not isinstance(candidates, list) or any(
+            not isinstance(c, dict) or not isinstance(c.get("name"), str) or c.get("basis") not in allowed
+            for c in candidates
+        ):
+            raise ValueError(f"invalid extraction field: {field}")
+    return parsed
+
+
 def extract_one(image_path) -> dict:
     b64 = base64.b64encode(image_path.read_bytes()).decode()
     body = config.glimmer_body(
@@ -83,16 +100,30 @@ def extract_one(image_path) -> dict:
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
             {"type": "text", "text": PROMPT},
         ]}], 1100, SCHEMA)
-    req = urllib.request.Request(
-        f"{config.GLIMMER_URL}/v1/chat/completions",
-        data=json.dumps(body).encode(), headers={"Content-Type": "application/json"},
-    )
-    resp = json.load(urllib.request.urlopen(req, timeout=900))
-    content = resp["choices"][0]["message"]["content"]
-    start, end = content.find("{"), content.rfind("}")
-    if start < 0 or end <= start:
-        raise ValueError(f"no JSON in extraction output: {content[:120]!r}")
-    return {"parsed": json.loads(content[start:end + 1]), "content": content, "timings": resp.get("timings", {})}
+    url = f"{config.GLIMMER_URL}/v1/chat/completions"
+    for attempt in range(2):
+        req = urllib.request.Request(
+            url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"},
+        )
+        resp = json.load(urllib.request.urlopen(req, timeout=900))
+        choice = resp["choices"][0]
+        content = choice["message"]["content"] or ""
+        start, end = content.find("{"), content.rfind("}")
+        try:
+            if choice.get("finish_reason") == "length":
+                raise ValueError("extraction exceeded output token budget")
+            if start < 0 or end <= start:
+                raise ValueError("no complete JSON in extraction output")
+            parsed = validate_extraction(json.loads(content[start:end + 1]))
+        except ValueError:
+            if attempt:
+                raise
+            # Text-heavy evidence can exceed the ordinary read budget. Retry
+            # once with more space, never promote a recovered prefix to evidence.
+            body["max_tokens"] = 4096
+            body["temperature"] = 0.2
+            continue
+        return {"parsed": parsed, "content": content, "timings": resp.get("timings", {})}
 
 
 def _name_sim(a: str, b: str) -> float:

@@ -70,6 +70,41 @@ class PipelineTests(unittest.TestCase):
         self.conn.close()
         self.temp.cleanup()
 
+    def test_truncated_extraction_retries_without_accepting_prefix(self):
+        requests = []
+
+        def response(request, timeout):
+            requests.append(json.loads(request.data))
+            content = json.dumps(EVIDENCE)
+            # Even syntactically complete JSON must not mask a token-cap stop.
+            reason = "length" if len(requests) == 1 else "stop"
+            return io.BytesIO(json.dumps({"choices": [{"message": {"content": content},
+                                                      "finish_reason": reason}]}).encode())
+
+        with patch.object(extract.urllib.request, "urlopen", response):
+            result = extract.extract_one(self.analysis / "hash1.jpg")
+        self.assertEqual(result["parsed"], EVIDENCE)
+        self.assertEqual([r["max_tokens"] for r in requests], [1100, 4096])
+        self.assertEqual(requests[1]["temperature"], 0.2)
+
+    def test_repeated_invalid_output_remains_a_failure(self):
+        raw = json.dumps({"choices": [{"message": {"content": '{"visible_text": "unfinished'},
+                                      "finish_reason": "length"}]}).encode()
+        with patch.object(extract.urllib.request, "urlopen", side_effect=lambda *a, **k: io.BytesIO(raw)) as send:
+            with self.assertRaisesRegex(ValueError, "token budget"):
+                extract.extract_one(self.analysis / "hash1.jpg")
+        self.assertEqual(send.call_count, 2)
+
+    def test_extraction_field_validation(self):
+        invalid = [{}, {**EVIDENCE, "cannot_determine": "false"},
+                   {**EVIDENCE, "visible_text": []}, {**EVIDENCE, "dish_candidates": "dish"},
+                   {**EVIDENCE, "dish_candidates": [{"name": "dish", "basis": "guessed"}]},
+                   {**EVIDENCE, "place_name_candidates": [{"name": 123, "basis": "signage"}]}]
+        for parsed in invalid:
+            with self.subTest(parsed=parsed), self.assertRaises(ValueError):
+                extract.validate_extraction(parsed)
+        self.assertEqual(extract.validate_extraction(EVIDENCE), EVIDENCE)
+
     def test_request_dialects(self):
         for model in ("", "synthetic-fp8"):
             with self.subTest(model=model), patch.object(config, "GLIMMER_MODEL", model):

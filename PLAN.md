@@ -195,9 +195,9 @@ Nothing in §3 Must may quietly depend on an unproven item. Each dependency has 
 | Fri Oct 30 | E3 extraction; grouping v1; Glimmer-DE feasibility (R4); place resolution v1 | Extraction metrics; first end-to-end visits on demo corpus |
 | Sat Oct 31 | E5 reconstruction; timeline/map/visit UI; corrections v1; E4 probe (R7) | Golden-query dry run; correction round-trip works |
 | Sun Nov 1 | E6 agent + golden-query eval; taste profile v1 (R12/R13); voice probe (R9); Strix Halo arm (R10) | Agent vs search comparison measured; Must feature-complete |
-| Mon Nov 2 | Hardening: background/incremental, contextual feed, share card, license pass (R11), PWA demo reliability (R14) | **Feature freeze for Must/Should**; demo dataset locked |
+| Mon Nov 2 | Hardening alongside continued feature work: background/incremental, contextual feed, share card, license pass (R11), PWA demo reliability (R14) | Demo dataset selected for rehearsal; reset script restores demo state (dataset may be refreshed before submission) |
 | Tue Nov 3 | Demo recording, submission draft, eval report write-up, rehearsal on demo hardware | Video recorded; submission form drafted; repo public-ready |
-| Wed Nov 4 | Buffer, final checks, submit by 9:00 PM ET (aim: noon) | Submitted; no new features after noon |
+| Wed Nov 4 | Buffer, final checks, submit by 9:00 PM ET (aim: noon for the package) | Submitted by 9:00 PM ET — the submission deadline is the only cutoff |
 
 ## 13. Workstreams (agent lanes)
 
@@ -210,7 +210,7 @@ Coordination rules are AGENTS.md's (worklog per logical unit, exact-path staging
 
 ## 14. Risks (top)
 
-1. **Scope vs. Nov 4.** Mitigation: Must tier is a vertical slice; Should/Stretch are pre-cut in writing (§3), and §12 freezes features Nov 2.
+1. **Scope vs. Nov 4.** Mitigation: Must tier is a vertical slice; Should/Stretch are pre-cut in writing (§3), and feature work continues until the Nov 4 submission deadline while demo/submission work runs in parallel from Nov 2.
 2. **Local model quality insufficient on real photos** (signs/Japanese/abstention). Mitigation: E3 measures early (Oct 30); confirmation-first UX is a designed fallback, not an apology; claims track measurements.
 3. **Glimmer throughput makes import feel broken.** Mitigation: embeddings-first progress (library browsable before extraction finishes), staged pipeline visibility, demo corpus sized to measured throughput.
 4. **Demo data privacy.** Mitigation: only the consented/synthetic demo subset on camera; real collections never leave ignored local directories; no private locations or bystanders in any public artifact.

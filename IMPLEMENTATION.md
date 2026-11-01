@@ -156,7 +156,7 @@ Agent-handoff checklist for [PLAN.md](PLAN.md). Conventions:
 
 ## DEM — Demo, submission, and documentation
 
-- [ ] **DEM-01 [M]** Demo dataset lock (Nov 2): corpus, labels, model checkpoints, and configs frozen; reset script restores demo state. *Acceptance:* clean-machine demo rehearsal passes from the reset script.
+- [ ] **DEM-01 [M]** Demo dataset selection: corpus, labels, model checkpoints, and configs chosen for rehearsal; reset script restores demo state. The dataset may be refreshed before submission if it improves the demo. *Acceptance:* clean-machine demo rehearsal passes from the reset script.
 - [ ] **DEM-02 [M]** Demo hardware rehearsal: PRO 6000 box + phone PWA over LAN and localhost fallback; timing of every live step. *Acceptance:* two consecutive full run-throughs within the video's timings.
 - [ ] **DEM-03 [M]** 3-minute video per PLAN §10 script, recorded by Nov 3; only in-period built features shown; prior art (e.g. the DE pattern) credited accurately. *Acceptance:* video accessible at a public link; claims checklist vs. QA-03/QA-04 signed off.
 - [ ] **DEM-04 [M]** Submission package: CV platform entry by the Representative — public repo, video link, all contributors, track = Indie Developer, bonus flags (Open Weight / Agentic) only as measured, deadline Nov 4 9:00 PM ET (internal target: noon). *Acceptance:* submission confirmation saved; checklist in worklog.
@@ -173,5 +173,5 @@ Agent-handoff checklist for [PLAN.md](PLAN.md). Conventions:
 3. **Day 3 (Oct 30):** EMB-04/05, EXT-01…03, REC-01…04, GDE-01 (probe only), PWA-03/04/08.
 4. **Day 4 (Oct 31):** REC-05/06, AGT-01…04, PWA-09/10, EXT-04 probe, QA-01/02.
 5. **Day 5 (Nov 1):** AGT-05…08, VOI-01/02, GDE-02…06 (if green), PWA-11…14, GLM-05.
-6. **Day 6 (Nov 2):** freeze — QA-03…06, PWA-15/16, DEM-01/05/06. No new features after this line without a lead decision recorded in the worklog.
-7. **Days 7–8 (Nov 3–4):** DEM-02/03/04/07 only.
+6. **Day 6 (Nov 2):** QA-03…06, PWA-15/16, DEM-01/05/06 alongside continued feature work.
+7. **Days 7–8 (Nov 3–4):** DEM-02/03/04/07 alongside any remaining feature work; the Nov 4, 9:00 PM ET submission deadline is the only cutoff.

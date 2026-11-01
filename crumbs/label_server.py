@@ -27,6 +27,55 @@ from . import config, db
 PREVIEW_DIR_NAME = "previews"
 PREVIEW_EDGE = 640
 
+# Offline reverse geocoding (city/region/country from GPS) via the optional
+# reverse-geocoder package, whose GeoNames data is local. The labeler must
+# never send coordinates to a network geocoder, so when the package is not
+# installed the UI falls back to coordinates + nearest cached place.
+try:
+    import reverse_geocoder as _rg
+except Exception:  # pragma: no cover - depends on local env
+    _rg = None
+
+_CC_NAMES = {
+    "JP": "Japan", "TW": "Taiwan", "US": "United States", "KR": "South Korea",
+    "CN": "China", "HK": "Hong Kong", "TH": "Thailand", "VN": "Vietnam",
+    "SG": "Singapore", "MY": "Malaysia", "ID": "Indonesia", "PH": "Philippines",
+    "GB": "United Kingdom", "FR": "France", "DE": "Germany", "IT": "Italy",
+    "ES": "Spain", "PT": "Portugal", "NL": "Netherlands", "CH": "Switzerland",
+    "AT": "Austria", "CZ": "Czechia", "AU": "Australia", "NZ": "New Zealand",
+    "CA": "Canada", "MX": "Mexico", "IN": "India", "AE": "UAE", "TR": "Turkey",
+}
+_geo_cache: dict = {}
+
+
+def geolocate(conn, lat, lon) -> dict:
+    """Location context for one photo: offline city/country + nearest place."""
+    out = {"lat": round(lat, 5), "lon": round(lon, 5)}
+    key = (round(lat, 2), round(lon, 2))
+    if _rg is not None:
+        if key not in _geo_cache:
+            try:
+                _geo_cache[key] = _rg.search([(lat, lon)], mode=1)[0]
+            except Exception:
+                _geo_cache[key] = None
+        hit = _geo_cache.get(key)
+        if hit:
+            out["city"] = hit.get("name")
+            out["region"] = hit.get("admin1")
+            cc = hit.get("cc")
+            out["country"] = _CC_NAMES.get(cc, cc)
+    from .places import haversine_m
+
+    best, best_d = None, None
+    for p in conn.execute("SELECT name, kind, lat, lon FROM places"):
+        d = haversine_m(lat, lon, p["lat"], p["lon"])
+        if best_d is None or d < best_d:
+            best, best_d = p, d
+    if best is not None and best_d <= 50000:
+        out["nearest_place"] = best["name"]
+        out["nearest_place_m"] = round(best_d)
+    return out
+
 
 def preview_path(content_hash: str) -> Path:
     return config.DATA_DIR / PREVIEW_DIR_NAME / f"{content_hash}.jpg"
@@ -79,6 +128,7 @@ PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="wi
    <div id="meta" class="muted"></div>
    <img id="photo" alt="">
    <div id="suggest"></div>
+   <div id="loc" class="muted"></div>
   </div>
   <div class="controls">
    <div class="cols">
@@ -117,6 +167,10 @@ function show(d) {
   document.getElementById('suggest').innerHTML =
     `<p>Model: <b>${cur.category}</b> · evidence: ${(cur.evidence_types||[]).join(', ') || '—'}` +
     (cur.candidates?.length ? `<br>Place candidates: ${cur.candidates.map(c=>`${c.name} (${Math.round(c.distance_m)}m)`).join(' · ')}` : '') + `</p>`;
+  const L = cur.location;
+  document.getElementById('loc').textContent = !L ? '📍 no GPS for this photo' :
+    `📍 ${[L.city, L.region, L.country].filter(Boolean).join(', ') || 'unknown area'} · ${L.lat}, ${L.lon}` +
+    (L.nearest_place ? ` · nearest place: ${L.nearest_place} (${L.nearest_place_m} m)` : '') + ' · offline approx.';
   document.getElementById('dishes').value = ''; document.getElementById('place').value = '';
   document.getElementById('evnew').value = '';
   renderCats(); renderEvs();
@@ -183,7 +237,7 @@ next();
 </script>"""
 
 
-_ITEM_SQL = """SELECT m.id AS media_id, m.rel_path, m.captured_at, m.content_hash,
+_ITEM_SQL = """SELECT m.id AS media_id, m.rel_path, m.captured_at, m.content_hash, m.gps_lat, m.gps_lon,
                   json_extract(c.labels_json, '$.category') AS category,
                   json_extract(c.labels_json, '$.evidence_types') AS evidence_types
            FROM media_items m
@@ -214,6 +268,7 @@ def _build_item(conn, row):
                JOIN places p ON p.id = vc.place_id WHERE vc.visit_id = ?
                ORDER BY vc.distance_m LIMIT 6""", (visit_id,))]
     r["candidates"] = cands
+    r["location"] = geolocate(conn, r["gps_lat"], r["gps_lon"]) if r["gps_lat"] is not None else None
     # Latest user labeling pass, so Back can show (and correct) prior labels.
     user = conn.execute(
         "SELECT field, value FROM labels WHERE media_id = ? AND source = 'user' ORDER BY id",

@@ -55,36 +55,54 @@ def ensure_preview(content_hash: str) -> Path:
 
 PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Crumbs labeler</title>
 <style>
- body{font-family:system-ui;margin:1rem auto;max-width:860px;padding:0 1rem;background:#111;color:#eee}
- img{max-width:100%;max-height:55vh;border-radius:8px}
+ body{font-family:system-ui;margin:.6rem auto;max-width:1240px;padding:0 .8rem;background:#111;color:#eee}
+ img{width:100%;max-height:74vh;object-fit:contain;background:#000;border-radius:8px}
  .row{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
+ .layout{display:flex;gap:1rem;align-items:flex-start}
+ .photocol{flex:1.5;min-width:0}
+ .controls{flex:1;min-width:290px}
+ .cols{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+ .stack{display:flex;flex-direction:column;gap:.35rem}
+ .stack button{text-align:left;padding:.45rem .6rem}
+ h3{margin:.1rem 0 .4rem;font-size:.85rem;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
  button{padding:.55rem .9rem;border-radius:8px;border:1px solid #555;background:#222;color:#eee;cursor:pointer;font-size:1rem}
  button.good{background:#14532d} button.bad{background:#7f1d1d}
- input{background:#222;color:#eee;border:1px solid #555;border-radius:6px;padding:.5rem;width:100%}
- .muted{color:#aaa} .card{background:#1b1b1b;border:1px solid #333;border-radius:10px;padding:1rem}
+ input{background:#222;color:#eee;border:1px solid #555;border-radius:6px;padding:.5rem;width:100%;box-sizing:border-box}
+ label{display:block;margin-top:.55rem}
+ .muted{color:#aaa} .card{background:#1b1b1b;border:1px solid #333;border-radius:10px;padding:.8rem}
+ @media (max-width:760px){.layout{flex-direction:column}.controls{min-width:0;width:100%}img{max-height:42vh}}
 </style>
 <h1>🥖 Crumbs labeler <span class="muted" id="prog"></span></h1>
 <div class="card">
- <div id="meta" class="muted"></div>
- <img id="photo" alt="">
- <div id="suggest"></div>
- <div class="row" id="cats"></div>
- <p class="muted">Category = the scene. Definitions: <b>sightseeing</b> landmark/viewpoint/tourist spot · <b>trip</b> away-from-home travel context (transit, hotel, street abroad, restaurant while traveling) · <b>personal</b> everyday life at home/locally (people, home, everyday objects/restaurants — <i>not</i> 'private') · <b>food</b> dish or meal · <b>other</b> you know what it is but it fits none (object/tchotchke, screenshot, document, pet). 'unknown' is the model's word for abstaining — humans label <b>other</b> instead.</p>
- <div class="muted">Evidence present (tap to toggle; menu/receipt photos are usually category <b>food</b> + that evidence):</div>
- <div class="row" id="evs"></div>
- <label>New evidence labels (comma-separated, created as needed)<input id="evnew" placeholder="e.g. pet, screenshot, ticket"></label>
- <label>Dishes (comma-separated, if any)<input id="dishes" placeholder="e.g. grilled fish set, tonkotsu ramen"></label>
- <label>Place name (if you know it)<input id="place" placeholder="e.g. Yudofu Sagana"></label>
- <div class="row">
-   <button class="good" id="save">Save + next (Enter)</button>
-   <button id="skip">Skip (s)</button>
+ <div class="layout">
+  <div class="photocol">
+   <div id="meta" class="muted"></div>
+   <img id="photo" alt="">
+   <div id="suggest"></div>
+  </div>
+  <div class="controls">
+   <div class="cols">
+    <div><h3>Category · keys 1-5</h3><div class="stack" id="cats"></div></div>
+    <div><h3>Evidence · letter keys</h3><div class="stack" id="evs"></div></div>
+   </div>
+   <label>New evidence labels (comma-separated)<input id="evnew" placeholder="e.g. pet, screenshot, ticket"></label>
+   <label>Dishes (comma-separated, if any)<input id="dishes" placeholder="e.g. grilled fish set, tonkotsu ramen"></label>
+   <label>Place name (if you know it)<input id="place" placeholder="e.g. Yudofu Sagana"></label>
+   <div class="row">
+     <button class="good" id="save">Save + next (Enter)</button>
+     <button id="skip">Skip (s)</button>
+   </div>
+   <details><summary class="muted">Definitions &amp; examples</summary>
+   <p class="muted">Category = the scene: <b>sightseeing</b> landmark/viewpoint/tourist spot · <b>trip</b> away-from-home travel context (transit, hotel, street abroad, restaurant while traveling) · <b>personal</b> everyday life at home/locally (people, home, everyday objects/restaurants — <i>not</i> 'private') · <b>food</b> dish or meal · <b>other</b> you know what it is but it fits none (object/tchotchke, screenshot, document, pet). 'unknown' is the model's word for abstaining — humans label <b>other</b> instead. A menu photo = food + menu evidence; a tchotchke at a restaurant = trip (if traveling) or personal (if local) + interior evidence. Selections start from the model's suggestion and stay highlighted until you change them.</p>
+   </details>
+  </div>
  </div>
- <p class="muted">Keys: 1 sightseeing · 2 trip · 3 personal · 4 food · 5 other · click a category to select, Enter saves. Selecting the shown category = confirming the model. A menu photo = food + menu evidence; a tchotchke at a restaurant = trip (if traveling) or personal (if local) + interior evidence.</p>
 </div>
 <script>
 let cur = null, chosen = null, evSel = new Set();
 const CATS = ['sightseeing','trip','personal','food','other'];
 const EVS = ['dish','menu','receipt','sign','storefront','interior','lodging','landmark','people','nature','document','other'];
+const EVKEYS = {dish:'d',menu:'m',receipt:'c',sign:'g',storefront:'t',interior:'i',lodging:'h',landmark:'k',people:'p',nature:'n',document:'o',other:'x'};
 function modelCategory(c) { return CATS.includes(c) ? c : 'other'; }
 async function next() {
   const r = await fetch('/api/next'); const d = await r.json();
@@ -105,7 +123,7 @@ function renderEvs() {
   const el = document.getElementById('evs'); el.innerHTML = '';
   [...new Set([...EVS, ...evSel])].forEach(ev => {
     const b = document.createElement('button');
-    b.textContent = ev;
+    b.textContent = (EVKEYS[ev] ? EVKEYS[ev] + ' · ' : '') + ev;
     if (evSel.has(ev)) b.className = 'good';
     b.onclick = () => { evSel.has(ev) ? evSel.delete(ev) : evSel.add(ev); renderEvs(); };
     el.appendChild(b);
@@ -135,9 +153,11 @@ document.getElementById('skip').onclick = next;
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') { if (e.key === 'Enter') save(); return; }
   const i = ['1','2','3','4','5'].indexOf(e.key);
-  if (i >= 0) { chosen = CATS[i]; renderCats(); }
-  if (e.key === 'Enter') save();
-  if (e.key === 's') next();
+  if (i >= 0) { chosen = CATS[i]; renderCats(); return; }
+  if (e.key === 'Enter') { save(); return; }
+  if (e.key === 's') { next(); return; }
+  const ev = Object.keys(EVKEYS).find(k => EVKEYS[k] === e.key.toLowerCase());
+  if (ev) { evSel.has(ev) ? evSel.delete(ev) : evSel.add(ev); renderEvs(); }
 });
 next();
 </script>"""

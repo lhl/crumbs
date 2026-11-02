@@ -5,10 +5,10 @@ Three minutes, Must-scope only, every beat backed by a working feature. Concrete
 ## Beats
 
 1. **The problem (0:00–0:25).** Scrolling a camera roll, failing to name a restaurant from a food photo. Cut to the offline globe: clusters of real trips, rebuilt locally. *Feature: PWA-06 globe + real corpus export.*
-2. **The pipeline, visibly local (0:25–1:10).** Import → classify → group on screen with the model inventory beside it (MODELS.md): photos become categories, evidence, visits — no API calls (the blocked-network globe test is the proof). One food visit resolves only by combining menu text + GPS candidates. *Features: IMP-01, EMB, REC-01/02/07, EXT.*
+2. **The pipeline, self-hosted (0:25–1:10).** Import → classify → group on screen with the model inventory beside it (MODELS.md): photos become categories, evidence, visits. Disclose whether inference uses a local APU or the separate dev GPU box, and whether cached place lookup data came from Overpass. The blocked-network globe test proves offline map rendering, not that every pipeline stage is network-free. Feature a visit combining visible text with nearby place candidates only after the current reconciliation verifies it. *Features: IMP-01, EMB, REC-01/02/07, EXT.*
 3. **Ask (1:10–1:50).** The anchor query: "what was the dashi restaurant near <anchor area> in <trip month>?" — answered from visits and ranked candidates with evidence. Then "what did I have at <candidate place>?" for dishes. *Feature: AGT v1 (CLI + `/v1/ask`).*
 4. **Correction + honest unknown (1:50–2:25).** One review-queue question answered (candidate confirmed/rejected, resolution updates); one question about a place never visited → designed unknown. *Features: REC-02 queue, labels.*
-5. **Close on measurement (2:25–3:00).** The zbook rate table (MODELS.md) and the privacy statement: every model on the box, tiles offline, location history never leaves. *Features: MODELS.md, bridge tiers.*
+5. **Close on measurement (2:25–3:00).** The APU and dev rate tables (MODELS.md), plus the actual privacy boundary: self-hosted model inference, offline tiles where configured, development-only hosted comparison and Overpass calls disclosed. Do not claim that remote dev processing stayed on the importing device. *Features: MODELS.md, bridge tiers.*
 
 ## Measured results (presentation material, 2026-11-01)
 
@@ -30,7 +30,7 @@ All figures below were measured on the 440-photo sample on our own hardware and 
 | Triage classification | Muse Glimmer 30B | 19.4 | zbook, llama.cpp |
 | Selective extraction | Muse Glimmer 30B | ~30 (evidence photos only) | zbook, llama.cpp |
 
-At these rates, the full 9,199-photo iCloud library costs about 8 minutes of DINOv3 embedding, 21 minutes of PE-L classification, 7.2 hours of SAM segmentation, or roughly 50 hours of Glimmer triage. The pipeline order in the next section follows from these numbers.
+These sample rates are historical APU measurements, not forecasts for the full run. The imported corpus now contains 9,669 distinct photos; both dev Glimmer classification passes cover it completely. Generative dev triage took about 12 minutes across four FP8 vLLM replicas using 640 px previews. That is a different quantization, resolution, and concurrency setup from the single-slot APU baseline; use MODELS.md for the caveats and measured food-quality difference. Selective extraction remains a separate pass whose completion is recorded in the latest worklog.
 
 ### Agreement between classifiers (category, 440 photos)
 
@@ -61,26 +61,26 @@ PE's low recall is a calibration failure, not missing signal: its 'unknown' prom
 
 ## Full processing pipeline (as built)
 
-This is the pipeline that exists in the `crumbs` package today and processed the sample corpus end to end. Every stage is a `crumbs` subcommand; stages with no model are deterministic code.
+This is the pipeline implemented in the `crumbs` package. It processed the sample corpus end to end; full-corpus stage completion and failures are recorded separately in the worklog. Every stage is a `crumbs` subcommand; stages with no model are deterministic code. The Ask parser and visit reconciliation are deterministic today, not a Glimmer agent loop.
 
 | # | Stage | Command | Model / engine | Box |
 | --- | --- | --- | --- | --- |
 | 1 | Photo import | `import-photos` | exiftool (EXIF time/GPS) + ImageMagick (1024 px analysis copies); SHA-256 dedupe; originals untouched | strixhalo |
 | 2 | Location import | `import-locations`, `stays`, `tz`, `correlate` | Wanderings location export → dwell stays, camera-timezone estimates, photo↔stay correlation | strixhalo |
 | 3 | Embed | `embed` | DINOv3 ViT-L/16 (PyTorch/ROCm); vectors stored in SQLite | zbook / strixhalo |
-| 4 | Classify | `classify` | Muse Glimmer 30B (Q4_K_M GGUF + vision projector + DFlash draft) via llama.cpp: category + evidence types as generated JSON, 19.4 s/photo | zbook |
+| 4 | Classify | `classify` | Muse Glimmer 30B generated category/evidence JSON; original GGUF sample and full dev FP8 results retained with distinct checkpoint metadata. No-training restricted-read comparison results are also imported | zbook / dev |
 | 5 | Group | `group` | Deterministic time/GPS grouping into visits and trips | any |
-| 6 | Extract | `extract` | Glimmer long-form reads, only on food/evidence photos: full text transcription, dish and place-name candidates; place names matched to nearby registry places (signage evidence) | zbook |
+| 6 | Extract | `extract` | Glimmer long-form reads on selected food/evidence photos; full text transcription, dish and text-based place-name candidates; names matched to nearby registry places. Use `GLIMMER_MODEL` for vLLM and inspect failure/remaining counts | zbook / dev |
 | 7 | Place candidates | `places-fetch`, `nearby`, `place-search` | OpenStreetMap Overpass at development time, cached in SQLite; per-visit candidates ranked check-in > signage text > GPS proximity | strixhalo |
 | 8 | Reconcile | `reconcile` | Evidence scoring over visits; builds the review queue of targeted questions | any |
 | 9 | Ask / serve | `ask`, `serve` | Evidence-linked answers over the local index, every claim tied to its records; read-only local API | strixhalo + zbook |
 | 10 | Label / score | `label`, `score` | Human labeling UI (phone-friendly) and scoring of model output against those labels | strixhalo |
 
-Everything runs on the three local Strix Halo boxes (each: Ryzen AI MAX+ 395, Radeon 8060S, 125 GB unified memory). No photo, location record, or derived result leaves these machines in the built pipeline.
+The initial pipeline ran on the Strix Halo boxes; full-corpus Glimmer/SAM work also transferred previews to the self-hosted `dev` GPU box. A hosted DE-2.1 comparison sent photos to an external model API by lead decision, and development Overpass lookups expose queried areas. These are not an on-device-only development history. Do not describe optional voice transcription as built: the current API has no transcription route.
 
-## Also reviewed (measured, not in the built pipeline)
+## Comparative measurements on the original sample
 
-These models were downloaded, run over the same 440 photos, and scored — then deliberately left out of the pipeline for the reasons given. They are the comparison set behind the role assignments in the next section, and the presentation can show them as the evaluated alternatives.
+These models were evaluated on the same 440 photos. Their sample results inform the proposed routing roles below. Full-corpus PE and Glimmer-DE outputs have since been imported, but that does not mean automatic confidence-based routing or SAM crop integration is implemented.
 
 | Candidate | What we measured | Verdict |
 | --- | --- | --- |
@@ -111,12 +111,12 @@ Three rules the measurements produced:
 
 1. **No model names a place from food appearance.** Dish identity supports a visit; place identity comes from check-ins, GPS candidates, and text read in the photo (signage, menus, receipts), ranked by evidence strength.
 2. **Abstention is a routing signal, not an error.** Glimmer abstains on ~21% of photos and DE-2.1 on more; abstained photos go to the review queue or stay 'unnamed place near <area>' with their candidates listed.
-3. **Probabilities come from restricted reads, not generated text.** Glimmer's generative JSON carries no usable per-category probability (its confidence field is unreliable in practice, and llama.cpp does not enforce the schema). The llama.cpp server does return token logprobs — verified 2026-11-01 — so a DE-style logprob readout on Glimmer (letter-coded options, one token, normalized distribution) is feasible; it is the Glimmer-DE item in IMPLEMENTATION.md (GDE), not yet built.
+3. **Probabilities come from restricted reads, not generated text.** Glimmer's generative JSON carries no usable per-category probability (its confidence field is unreliable in practice, and llama.cpp does not enforce the schema). Letter-coded next-token logprob readout is now measured on llama.cpp and vLLM and has full-corpus imported outputs. This no-training experiment is not a trained/calibrated Glimmer-DE: LoRA, held-out calibration, and an automatic escalation policy remain unbuilt.
 
 Known limits, stated for the presentation: non-food categories have no independent ground truth yet (the efficient fix is adjudicating only photos where systems disagree); Glimmer's evidence-type list is its weak output (recall 0.138 against owner evidence labels), which is why SAM masks and DE evidence questions carry that axis; and the DE-2.1 numbers come from a general-purpose decision model used as a comparator — a Glimmer-DE trained on Crumbs labels is the planned replacement, not a shipped feature.
 
 ## Sufficiency verdict (from `crumbs demo`, current store)
 
-- The **pipeline demo is fully buildable from the current sample** (extraction hero, signage-confirmed candidate, review question, anchor visit all exist as real records).
+- The **sample previously carried an end-to-end pipeline demo**. Rebuild `crumbs demo` after full-corpus extraction and reconciliation and inspect the resulting local manifest; do not carry forward sample record IDs or claim a text-backed strong candidate until the current store supports it.
 - **Not public-video ready**: accuracy numbers exist only for the food slice (the other categories' labels mostly confirm the model default), trips over-merge at sample sparsity (feature visits, not trip narratives), and any public footage needs the owner's consented subset or the synthetic set.
 - A fresher iPhone/iCloud sync is **not required** for the demo; it would mainly buy a cleaner multi-day trip storyline.

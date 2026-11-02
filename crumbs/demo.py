@@ -36,27 +36,38 @@ def build_demo_manifest(conn) -> dict:
            ORDER BY vr.visit_id LIMIT 1""")
     beats["signage_strong"] = [dict(r) for r in conn.execute(
         """SELECT vr.visit_id, p.name FROM visit_resolutions vr JOIN places p ON p.id = vr.top_place_id
-           WHERE vr.status = 'candidate-strong'""")]
+           WHERE vr.status = 'candidate-strong' AND EXISTS (
+             SELECT 1 FROM visit_place_candidates vc WHERE vc.visit_id = vr.visit_id
+               AND vc.place_id = vr.top_place_id AND vc.evidence = 'signage-text')""")]
     beats["review_question"] = one("SELECT visit_id, question FROM review_questions WHERE status = 'open' LIMIT 1")
     beats["categories"] = {r[0]: r[1] for r in conn.execute(
-        "SELECT json_extract(labels_json, '$.category'), COUNT(*) FROM classifications GROUP BY 1")}
+        """SELECT COALESCE(json_extract(c.labels_json, '$.category'), 'unclassified'), COUNT(*)
+           FROM media_items m LEFT JOIN classifications c ON c.id = (
+             SELECT latest.id FROM classifications latest WHERE latest.media_id = m.id
+             ORDER BY latest.id DESC LIMIT 1)
+           GROUP BY 1""")}
     beats["unlabeled_for_scoring"] = conn.execute(
-        "SELECT COUNT(*) FROM media_items WHERE NOT EXISTS (SELECT 1 FROM labels WHERE media_id = media_items.id AND field = 'category')"
+        "SELECT COUNT(*) FROM media_items WHERE NOT EXISTS (SELECT 1 FROM labels WHERE media_id = media_items.id AND field = 'category' AND source = 'user')"
     ).fetchone()[0]
 
     japan_visits = conn.execute(
         "SELECT COUNT(*) FROM visits WHERE center_lat BETWEEN 30 AND 46 AND center_lon BETWEEN 129 AND 146").fetchone()[0]
+    gaps = []
+    unlabeled = beats["unlabeled_for_scoring"]
+    if unlabeled:
+        gaps.append(f"{unlabeled} photos still have no user category label; accuracy numbers cover the labeled subset only.")
+    if not beats["signage_strong"]:
+        gaps.append("No text-backed candidate-strong visit resolution yet; inspect extraction coverage, cached places, and reconciliation before choosing that demo beat.")
+    gaps.append(
+        f"Trips may over-merge ({beats['globe_hero']['trips']} trips over {beats['globe_hero']['visits']} visits): "
+        "demo should feature specific visits, not whole-trip narratives.")
+    gaps.append("Public video may only show a consented subset (owner decision) or the synthetic set; this manifest names real visits and stays local.")
     verdict = {
         "sample_photos": beats["globe_hero"]["gps_photos"],
         "japan_visits": japan_visits,
         "can_demo_pipeline_end_to_end": bool(beats["extraction_hero"] and beats["signage_strong"] and beats["review_question"]),
         "public_video_ready": False,
-        "gaps": [
-            "No user labels yet — no accuracy numbers can be shown until the labeler pass happens.",
-            "Trips over-merge at sample sparsity (14 'trips', some spanning weeks/cities): demo should feature specific visits, not whole-trip narratives, until a fuller import exists.",
-            "Public video may only show a consented subset (owner decision) or the synthetic set; this manifest names real visits and stays local.",
-            "A fresher iPhone/iCloud sync would add complete recent trips (better story arc) but is not required for the pipeline demo.",
-        ],
+        "gaps": gaps,
     }
     out = {"beats": beats, "verdict": verdict}
     dest = config.DATA_DIR.parent / "demo"

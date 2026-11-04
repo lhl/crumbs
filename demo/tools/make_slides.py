@@ -107,13 +107,54 @@ JevBench <b>76.6%</b> (raw read, 231 items) · Decision Index 0.3 skill <b>32.60
 </body></html>"""
 
 
+GEO_CSS = """
+.flow { display: grid; grid-template-columns: 1fr 70px 1fr 70px 0.8fr; align-items: center; margin-top: 46px; }
+.col h3 { font-size: 19px; text-transform: uppercase; letter-spacing: 1.2px; color: #8a8a8a; margin-bottom: 14px; }
+.box { background: #fff; border: 1px solid #e3ddd3; border-radius: 14px; padding: 16px 20px; margin-bottom: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+.box b { font-size: 25px; display: block; }
+.box span { font-size: 19px; color: #6b6b6b; display: block; margin-top: 3px; }
+.box .n { color: #e63946; font-weight: 700; }
+.box.next { background: transparent; border: 2px dashed #c9c1b5; box-shadow: none; }
+.box.next b { color: #8a8a8a; }
+.box.out { background: #1b1b1b; border-color: #1b1b1b; }
+.box.out b { color: #fff; } .box.out span { color: #bdb6ab; }
+.arrow { font-size: 54px; color: #e63946; text-align: center; font-weight: 300; }
+"""
+
+GEO = f"""<html><head><style>{CSS}{GEO_CSS}</style></head><body>
+<h1>Location data</h1>
+<div class="flow">
+<div class="col"><h3>Sources</h3>
+  <div class="box"><b>Photo EXIF</b><span>GPS + timestamps · <span class="n" style="display:inline">8,205</span> of 9,669 photos geotagged</span></div>
+  <div class="box"><b>Location history</b><span>Wanderings GeoJSON · <span class="n" style="display:inline">25,165</span> points, 2018–2026</span></div>
+  <div class="box"><b>OpenStreetMap</b><span>Place registry (1,619 places, cached) · local PMTiles basemap</span></div>
+  <div class="box"><b>GeoNames</b><span>Offline reverse geocoding</span></div>
+  <div class="box next"><b>Next: check-ins, itineraries, health activity</b><span>Each source is its own import</span></div>
+</div>
+<div class="arrow">→</div>
+<div class="col"><h3>Crumbs builds</h3>
+  <div class="box"><b>Visits &amp; trips</b><span><span class="n" style="display:inline">590</span> visits in 20 trips</span></div>
+  <div class="box"><b>Stays</b><span><span class="n" style="display:inline">554</span> dwell stays from location history</span></div>
+  <div class="box"><b>Time-zone fixes</b><span>8,166 photos matched to the track</span></div>
+  <div class="box"><b>Place candidates</b><span>6,502 ranked by GPS distance + sign text · 335 review questions</span></div>
+</div>
+<div class="arrow">→</div>
+<div class="col"><h3>You get</h3>
+  <div class="box out"><b>Globe &amp; heatmap</b><span>Fully local map, zero external requests</span></div>
+  <div class="box out"><b>Ask answers</b><span>Every place with its evidence</span></div>
+</div>
+</div>
+</body></html>"""
+
+
 def main(out_dir):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         b = p.chromium.launch(executable_path="/usr/bin/chromium")
         page = b.new_page(viewport={"width": 1920, "height": 1080})
-        for name, html in (("models", MODELS), ("results", RESULTS)):
+        for name, html in (("models", MODELS), ("results", RESULTS), ("geo", GEO)):
             page.set_content(html)
             page.wait_for_timeout(300)
             page.screenshot(path=str(out / f"{name}.png"))

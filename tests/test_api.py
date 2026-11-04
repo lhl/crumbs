@@ -122,6 +122,49 @@ class ApiTests(unittest.TestCase):
         with urllib.request.urlopen(urllib.request.Request(base + "/v1/review", headers=auth), timeout=3) as r:
             self.assertEqual(json.load(r), {"questions": []})
 
+    def test_agent_token_is_read_only_and_capped_at_tier_1(self):
+        import sqlite3
+        from crumbs import db
+
+        conn = sqlite3.connect(self.root / "synthetic.db", check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        db.init_schema(conn)
+        conn.execute("INSERT INTO source_imports (kind,scope,source_ref) VALUES ('photos','synthetic','synthetic')")
+        conn.execute("INSERT INTO media_items (id,content_hash,source_path,rel_path,captured_at,gps_lat,gps_lon,import_id) "
+                     "VALUES (1,'h1','synthetic','synthetic/a.jpg','2025-01-01 12:00:00',35.011634,135.768134,1)")
+        conn.execute("INSERT INTO classifications (media_id,model,checkpoint,labels_json) VALUES "
+                     "(1,'synthetic','synthetic','{\"category\": \"food\"}')")
+        conn.commit()
+        env = {"CRUMBS_API_TOKEN": "synthetic-owner", "CRUMBS_AGENT_TOKEN": "synthetic-agent"}
+        with patch.dict(os.environ, env):
+            server = api.HTTPServer(("127.0.0.1", 0), api.make_handler(conn))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+
+        def get(path, tok):
+            req = urllib.request.Request(base + path, headers={"Authorization": f"Bearer {tok}"})
+            with urllib.request.urlopen(req, timeout=3) as r:
+                return json.load(r)
+        try:
+            owner = get("/v1/search?category=food&tier=2", "synthetic-owner")["results"][0]
+            agent = get("/v1/search?category=food&tier=2", "synthetic-agent")["results"][0]
+            self.assertEqual((owner["lat"], owner["rel_path"]), (35.011634, "synthetic/a.jpg"))
+            self.assertEqual(agent["lat"], 35.01)  # rounded: tier capped at 1
+            self.assertNotIn("rel_path", agent)
+            for path in ("/v1/review/1", "/v1/current"):
+                req = urllib.request.Request(base + path, method="POST", data=b'{"lat": 1, "lon": 2}',
+                                             headers={"Authorization": "Bearer synthetic-agent"})
+                with self.subTest(path=path):
+                    with self.assertRaises(urllib.error.HTTPError) as err:
+                        urllib.request.urlopen(req, timeout=3)
+                    self.assertEqual(err.exception.code, 403)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+            conn.close()
+
     def test_tokenless_writes_refuse_foreign_origins(self):
         import sqlite3
         from crumbs import db

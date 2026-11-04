@@ -14,7 +14,9 @@ section 8). Design rules from the bridge sketch:
   only, tier 1 = redacted (coordinates rounded to ~1 km, file names
   stripped), tier 2 = full records. Default tier 1.
 - If CRUMBS_API_TOKEN is set, all /v1/* except /v1/health require it as a
-  Bearer token. Binds localhost by default; a non-loopback bind requires a
+  Bearer token. CRUMBS_AGENT_TOKEN, if set, is a second token for an
+  external agent (the Muse bridge): read-only (POSTs refused) and capped
+  at tier 1 whatever tier the caller asks for. Binds localhost by default; a non-loopback bind requires a
   token. Remote use belongs on a trusted LAN or the owner's authenticated
   tunnel (Tailscale/Headscale), never an exposed public port.
 """
@@ -57,6 +59,7 @@ def _media_row(r, tier):
 
 def make_handler(conn):
     token = os.environ.get("CRUMBS_API_TOKEN", "").strip()
+    agent_token = os.environ.get("CRUMBS_AGENT_TOKEN", "").strip()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -71,9 +74,19 @@ def make_handler(conn):
             self.end_headers()
             self.wfile.write(body)
 
-        def _authed(self):
+        def _role(self):
+            """'owner', 'agent', or None (unauthorized)."""
             supplied = self.headers.get("Authorization", "").encode()
-            return not token or hmac.compare_digest(supplied, f"Bearer {token}".encode())
+            if agent_token and hmac.compare_digest(supplied, f"Bearer {agent_token}".encode()):
+                return "agent"
+            if not token and not agent_token:
+                return "owner"  # localhost dev: no tokens configured
+            if token and hmac.compare_digest(supplied, f"Bearer {token}".encode()):
+                return "owner"
+            return None
+
+        def _authed(self):
+            return self._role() is not None
 
         def do_OPTIONS(self):
             self.send_response(204)
@@ -93,6 +106,8 @@ def make_handler(conn):
             if not self._authed():
                 return self._json({"error": "unauthorized"}, 401)
             tier = _tier_of(q)
+            if self._role() == "agent":
+                tier = min(tier, 1)  # an external agent never gets exact coordinates or file paths
             try:
                 if path == "/v1/search":
                     return self._json(self._search(q, tier))
@@ -149,6 +164,8 @@ def make_handler(conn):
             path = u.path.rstrip("/")
             if not self._authed():
                 return self._json({"error": "unauthorized"}, 401)
+            if self._role() == "agent":
+                return self._json({"error": "the agent token is read-only"}, 403)
             if not self._origin_ok():
                 return self._json({"error": "cross-origin write refused"}, 403)
             try:

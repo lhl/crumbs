@@ -34,12 +34,23 @@ CRUMBS_API_TOKEN=... CRUMBS_AGENT_TOKEN=... crumbs serve --host <tailnet IP of t
 This can run alongside a token-free `crumbs serve` on 127.0.0.1 for the local PWA: the two
 bind different addresses and read the same database.
 
+If the agent platform injects credentials only on HTTPS requests (Muse does: on plain HTTP
+the request arrives with its placeholder instead of the token, logged by Crumbs as
+`placeholder '…:'`), put Tailscale Serve in front. It stays tailnet-only, with a valid certificate:
+
+```bash
+sudo tailscale serve --bg --https=8443 http://<tailnet IP of this machine>:8770
+```
+
+The base URL is then `https://<MagicDNS name>:8443`. Pick a free Serve port (443, 8443, or 10000);
+`tailscale serve status` shows routes already in use.
+
 A non-loopback bind refuses to start without `CRUMBS_API_TOKEN`. The Glimmer server
 must also be reachable from this machine (`GLIMMER_URL`, default `http://127.0.0.1:18080`).
 
 ## 4. Configure the Muse agent
 
-- The base URL (`http://<MagicDNS name>:8770`) goes in the agent's plain configuration.
+- The base URL (`https://<MagicDNS name>:8443` behind Serve, or `http://<MagicDNS name>:8770` directly) goes in the agent's plain configuration.
 - Enter `CRUMBS_AGENT_TOKEN` through the agent platform's secure credential form, registered to
   that one host as a Bearer header. On Muse a helper sends a placeholder that is swapped for the
   real token only on requests to that host, so the token never appears in commands or chat.

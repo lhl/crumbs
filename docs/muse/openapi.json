@@ -5,7 +5,7 @@
     "version": "1",
     "description": "The owner's private food and travel memory, served from their own machine over their tailnet. Read docs at GET /v1/skill before calling. Check GET /v1/health first; if it fails, tell the owner Crumbs is offline and stop. One request at a time."
   },
-  "servers": [{"url": "http://{host}:8770", "variables": {"host": {"default": "crumbs-host", "description": "The Crumbs machine's tailnet (MagicDNS) name"}}}],
+  "servers": [{"url": "https://{host}:8443", "description": "Behind Tailscale Serve (needed when the agent platform injects credentials only over HTTPS)", "variables": {"host": {"default": "crumbs-host", "description": "The Crumbs machine's tailnet (MagicDNS) name"}}}, {"url": "http://{host}:8770", "description": "Direct", "variables": {"host": {"default": "crumbs-host"}}}],
   "security": [{"bearer": []}],
   "components": {
     "securitySchemes": {"bearer": {"type": "http", "scheme": "bearer", "description": "The agent token: read-only, capped at privacy tier 1. Supplied by the platform's credential helper; never shown in chat."}},

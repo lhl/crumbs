@@ -1,6 +1,6 @@
 # Brainstorming
 
-Working notes for the hackathon project. See [README.md](README.md) for rules, judging rubric, and deadlines.
+Working notes for the hackathon project. See [HACKATHON.md](HACKATHON.md) for rules, judging rubric, and deadlines.
 
 ## Current direction: Crumbs (working name)
 

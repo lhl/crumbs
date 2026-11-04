@@ -1,6 +1,6 @@
 # Crumbs — Agent Guide
 
-Crumbs is the project built in this repository for the Meta Global AI Developer Hackathon (building period Oct 27 – Nov 4, 2026; submissions due Nov 4, 9:00 PM ET). It reconstructs a searchable travel and food history — trips, visits, meals, and stays — from photos, check-ins, and location history, with every inferred place linked to its supporting evidence. See [BRAINSTORMING.md](BRAINSTORMING.md) for the product direction and [README.md](README.md) for the hackathon rules, judging rubric, and deadlines.
+Crumbs is the project built in this repository for the Meta Global AI Developer Hackathon (building period Oct 27 – Nov 4, 2026; submissions due Nov 4, 9:00 PM ET). It reconstructs a searchable travel and food history — trips, visits, meals, and stays — from photos, check-ins, and location history, with every inferred place linked to its supporting evidence. See [BRAINSTORMING.md](BRAINSTORMING.md) for the product direction [README.md](README.md) for what is built, and [HACKATHON.md](HACKATHON.md) for the hackathon rules, judging rubric, and deadlines.
 
 **This repository is public.** That fact outranks convenience in every rule below. This `AGENTS.md` is read every session and covers the ground rules that apply to every task. Its workflow is adapted from systems proven on earlier projects; do not copy content, paths, or context from other projects into this repo.
 
@@ -19,7 +19,8 @@ Instruction precedence: if this file conflicts with platform / system / develope
 
 | Path | Purpose |
 | --- | --- |
-| `README.md` | Hackathon participant guide: rules, schedule, judging, prizes. |
+| `README.md` | Product README: what Crumbs is, what's built, models, privacy line, how to run, docs index. |
+| `HACKATHON.md` | Hackathon participant guide: rules, schedule, judging, prizes. |
 | `BRAINSTORMING.md` | Product direction for Crumbs: problem, pipeline, model roles, demo scope, open checks. Living document, not a spec of built features. |
 | `worklog/README.md` | Worklog entry format, validation, rendering, and hooks. |
 | `worklog/entries/` | Immutable per-unit decisions, results, blockers, and handoffs. |
@@ -49,8 +50,8 @@ This is the section that prevents the one unrecoverable failure mode: leaking so
 
 ## Ground Rules
 
-- **Source of truth for direction:** [BRAINSTORMING.md](BRAINSTORMING.md) until a real plan/spec replaces it; update it in the same commit when direction moves. Update `README.md` only for hackathon-logistics facts, not as a worklog.
-- **The root `README.md` is currently the hackathon guide, not a product page.** When a product README is needed, that is its own reviewed logical unit — do not turn either `README.md` or `BRAINSTORMING.md` into an implementation diary; history goes in `worklog/entries/`.
+- **Source of truth for direction:** [BRAINSTORMING.md](BRAINSTORMING.md) until a real plan/spec replaces it; update it in the same commit when direction moves. Update `HACKATHON.md` only for hackathon-logistics facts, not as a worklog.
+- **The root `README.md` is the product page** (since 2026-11-05; the hackathon guide moved to `HACKATHON.md`). It describes only what is built and measured, follows non-negotiable 6, and is not an implementation diary — history goes in `worklog/entries/`, and neither `README.md` nor `BRAINSTORMING.md` becomes one.
 - **Preserve provenance and uncertainty.** Crumbs reconciles conflicting evidence; derived records must not overwrite source data, and code/docs must keep observed facts, model inferences, external lookup results, and user confirmations distinguishable. Never infer an exact restaurant from food appearance alone, and keep unknown places/dates unknown rather than forcing confident output.
 - **No hard-coded home directories in prose or code.** Use `~/` outside the repo and repo-relative paths inside it.
 - **Don't maximize model count.** Use multiple Meta models only where each improves the result (roles and open questions are in `BRAINSTORMING.md`); validate a model's capability on a real example before committing the integration to it. Do not claim local-only processing if data goes to a cloud API.

@@ -43,7 +43,7 @@ Non-Meta pieces Crumbs still needs (not discovery questions here): EXIF/metadata
 
 ### 2.1 Other open Meta models worth a look (beyond the hackathon catalog)
 
-The hackathon catalog (README §1) lists six model lines, but Meta FAIR has released many more open models. Sweep on 2026-10-27, ranked by relevance to Crumbs' five jobs. **None of these count toward the hackathon's named open-weight bonus (Glimmer / Spark Open only)** — they are engineering choices, not eligibility plays.
+The hackathon catalog (HACKATHON.md §1) lists six model lines, but Meta FAIR has released many more open models. Sweep on 2026-10-27, ranked by relevance to Crumbs' five jobs. **None of these count toward the hackathon's named open-weight bonus (Glimmer / Spark Open only)** — they are engineering choices, not eligibility plays.
 
 **Test now (added to the experiment plan):**
 
@@ -197,4 +197,4 @@ Reference pattern: **Shisa DE-2.1** (`shisa-ai/shisa-de-2.1`, Apache 2.0) — a 
 - DINOv3: https://ai.meta.com/research/dinov3/ and https://github.com/facebookresearch/dinov3 (model family sizes, HF/timm support, matching notebooks, k-NN/linear evaluation); license: https://ai.meta.com/resources/models-and-libraries/dinov3-license/ (DINOv3 License, "Built with DINOv3" redistribution term)
 - Glimmer GGUF artifacts (fetched 2026-10-28): https://huggingface.co/meta-models/Muse-Glimmer-30B-GGUF (Q4_K_M + mmproj + dflash file list and sizes) and https://huggingface.co/meta-models/Muse-Glimmer-30B-assistant (DFlash draft companion)
 - llama.cpp Glimmer support (checked in-tree 2026-10-28): `src/models/muse-glimmer.cpp`, `tools/mtmd/clip.cpp` (`clip_graph_muse_glimmer`), `conversion/muse_glimmer.py`, `--spec-type draft-dflash` in the server
-- Hackathon requirements, judging, and bonus eligibility: [README.md](README.md) §§9–10
+- Hackathon requirements, judging, and bonus eligibility: [HACKATHON.md](HACKATHON.md) §§9–10

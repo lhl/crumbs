@@ -1,9 +1,12 @@
-"""Read-only local API — the Crumbs side of the Muse bridge (API-01 v1,
-PLAN section 8). Design rules from the bridge sketch:
+"""Local API — the Crumbs side of the Muse bridge (API-01 v1, PLAN
+section 8). Design rules from the bridge sketch:
 
-- Read-only over the evidence store; every record returned carries its
-  stable local id and provenance so an external agent cites records, not
-  inventions.
+- Read-only over the evidence store, with one exception: the owner's
+  answers to review questions (POST /v1/review/<id>), which are appended
+  as user rows and never overwrite model output. Every record returned
+  carries its stable local id and provenance so an external agent cites
+  records, not inventions. Photos are served only as stripped previews
+  (GET /v1/media/<id>/preview).
 - `near=current` is resolved *server-side*: the phone/owner posts the
   current location to this server (token-gated), and external queries
   never need to handle raw coordinates for "where am I now" questions.
@@ -103,6 +106,12 @@ def make_handler(conn):
                     return self._json({"places": search_name(conn, q.get("q", [""])[0])})
                 if path == "/v1/anchor":
                     return self._json(self._anchor(q, tier))
+                if path.startswith("/v1/media/") and path.endswith("/preview"):
+                    return self._preview(int(path.split("/")[3]))
+                if path == "/v1/review":
+                    from .review import open_questions
+
+                    return self._json({"questions": open_questions(conn, limit=min(int(q.get("limit", ["20"])[0]), 100))})
                 if path == "/v1/ask":
                     from .ask import ask as ask_engine
 
@@ -113,18 +122,66 @@ def make_handler(conn):
             except Exception as e:
                 return self._json({"error": f"{type(e).__name__}: {e}"}, 500)
 
+        def _origin_ok(self):
+            """Writes without a token accept only same-machine pages, so an
+            arbitrary website cannot answer review questions via localhost."""
+            origin = self.headers.get("Origin")
+            if token or not origin:
+                return True
+            host = urlparse(origin).hostname or ""
+            return host in ("127.0.0.1", "localhost", "::1")
+
+        def _bytes(self, body, ctype, code=200):
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "private, max-age=3600")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_POST(self):
             u = urlparse(self.path)
-            if u.path.rstrip("/") != "/v1/current":
-                return self._json({"error": "not found"}, 404)
+            path = u.path.rstrip("/")
             if not self._authed():
                 return self._json({"error": "unauthorized"}, 401)
-            data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            CURRENT.update(lat=float(data["lat"]), lon=float(data["lon"]),
-                           at=datetime.now().isoformat(timespec="seconds"))
-            return self._json({"ok": True, "current_set": True})
+            if not self._origin_ok():
+                return self._json({"error": "cross-origin write refused"}, 403)
+            try:
+                data = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+            except ValueError:
+                return self._json({"error": "body must be JSON"}, 400)
+            if path == "/v1/current":
+                CURRENT.update(lat=float(data["lat"]), lon=float(data["lon"]),
+                               at=datetime.now().isoformat(timespec="seconds"))
+                return self._json({"ok": True, "current_set": True})
+            if path.startswith("/v1/review/"):
+                try:
+                    qid = int(path.split("/")[3])
+                except ValueError:
+                    return self._json({"error": "bad question id"}, 400)
+                from .review import answer_question
+
+                try:
+                    return self._json(answer_question(conn, qid, data.get("answer", ""), data.get("name")))
+                except ValueError as e:
+                    return self._json({"error": str(e)}, 400)
+            return self._json({"error": "not found"}, 404)
 
         # -- endpoints -------------------------------------------------
+        def _preview(self, media_id):
+            """Stripped, phone-sized JPEG of a photo's analysis copy (the
+            original is never served). Bearer-protected like every /v1 route."""
+            from .label_server import ensure_preview
+
+            r = conn.execute("SELECT content_hash FROM media_items WHERE id = ?", (media_id,)).fetchone()
+            if r is None:
+                return self._json({"error": "no such media"}, 404)
+            f = ensure_preview(r["content_hash"])
+            if not f.exists():
+                return self._json({"error": "no analysis image for this media"}, 404)
+            return self._bytes(f.read_bytes(), "image/jpeg")
+
         def _search(self, q, tier):
             text = q.get("q", [""])[0]
             cat = q.get("category", [None])[0]

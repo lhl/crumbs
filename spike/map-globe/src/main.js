@@ -306,18 +306,107 @@ $('btn-play').addEventListener('click', () => setPlaying(!playing));
 
 // Ask panel: talks to the local Crumbs API (`crumbs serve`, port 8770). If it
 // is not running, the panel says so plainly instead of faking an answer.
+// Optional overrides live in this browser only (never in the bundle):
+//   localStorage.crumbsApi   = 'http://<host>:8770'
+//   localStorage.crumbsToken = '<CRUMBS_API_TOKEN>'
+function apiSetting(key, fallback) {
+  try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
+}
+const API = apiSetting('crumbsApi', 'http://127.0.0.1:8770');
+function apiFetch(path, opts = {}) {
+  const token = apiSetting('crumbsToken', '');
+  const headers = { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  return fetch(API + path, { ...opts, headers });
+}
+const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Photos come through the API (bearer-protected), so load them as blobs.
+async function loadThumb(img) {
+  try {
+    const r = await apiFetch(`/v1/media/${img.dataset.media}/preview`);
+    if (!r.ok) throw new Error(String(r.status));
+    img.src = URL.createObjectURL(await r.blob());
+  } catch { img.replaceWith(Object.assign(document.createElement('span'), { className: 'thumb-missing', textContent: 'no preview' })); }
+}
+
+function placeHtml(c) {
+  const p = c.place;
+  if (p.name) {
+    const cls = p.status === 'confirmed' ? 'src ok' : 'src';
+    return `${esc(p.name)}${p.status === 'confirmed' ? ' ✓' : '?'} <span class="${cls}">${esc(p.source)}</span>`;
+  }
+  if (c.text_names.length) return `<span class="unnamed">unconfirmed</span> <span class="src">photo text: “${esc(c.text_names[0])}”</span>`;
+  return '<span class="unnamed">unnamed place</span>';
+}
+
+function cardHtml(c) {
+  const dishes = c.dishes.map((d) => `<span class="dish" title="${esc(d.basis)}">${esc(d.name)}<i>${esc(d.basis)}</i></span>`).join('');
+  const thumbs = c.media.map((m) => `<img alt="" data-media="${m}">`).join('');
+  const rejected = c.place.rejected ? `<div class="muted">You said it wasn't ${esc(c.place.rejected)}.</div>` : '';
+  let review = '';
+  if (c.review) {
+    const canConfirm = c.place.name && c.place.place_id;
+    review = `<div class="review" data-q="${c.review.question_id}">
+      ${canConfirm ? `<span>Was this ${esc(c.place.name)}?</span>
+      <button data-answer="confirm">Yes</button><button data-answer="reject">No</button>` :
+      `<span>Remember the place?</span><input placeholder="Name it" /><button data-answer="name">Save</button>`}
+    </div>`;
+  }
+  return `<div class="ask-card" data-visit="${c.visit_id}">
+    <div class="ask-head"><b>${esc(c.date || 'undated')}</b> · ${placeHtml(c)}</div>
+    ${thumbs ? `<div class="thumbs">${thumbs}</div>` : ''}
+    ${dishes ? `<div class="dishes">${dishes}</div>` : ''}
+    ${rejected}${review}
+  </div>`;
+}
+
+function renderCards(container, cards) {
+  container.innerHTML = cards.map(cardHtml).join('');
+  container.querySelectorAll('img[data-media]').forEach(loadThumb);
+  container.querySelectorAll('.review button').forEach((b) => b.addEventListener('click', () => answerReview(b)));
+}
+
+async function answerReview(btn) {
+  const box = btn.closest('.review');
+  const card = btn.closest('.ask-card');
+  const body = { answer: btn.dataset.answer };
+  if (body.answer === 'name') {
+    body.name = box.querySelector('input').value.trim();
+    if (!body.name) return;
+  }
+  box.textContent = 'Saving your answer…';
+  try {
+    const r = await apiFetch(`/v1/review/${box.dataset.q}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    const tmp = document.createElement('div');
+    renderCards(tmp, [d.visit]);
+    card.replaceWith(tmp.firstElementChild);
+  } catch (e) {
+    box.textContent = `Could not save: ${e.message}`;
+  }
+}
+
 async function runAsk() {
   const q = $('ask-q').value.trim();
   if (!q) return;
   const box = $('ask-answer');
+  box.className = '';
   box.textContent = 'Asking the local index…';
   try {
-    const r = await fetch(`http://127.0.0.1:8770/v1/ask?q=${encodeURIComponent(q)}`);
+    const r = await apiFetch(`/v1/ask?q=${encodeURIComponent(q)}`);
     const d = await r.json();
-    box.textContent = (d.answer || d.error || 'No answer.') +
-      (d.evidence ? `\n[evidence: visits ${JSON.stringify(d.evidence.visits)} · status ${d.status}]` : '');
-  } catch {
-    box.textContent = 'Local API offline — start it with: python3 -m crumbs.cli serve';
+    if (!r.ok) throw new Error(d.error || r.status);
+    const header = (d.answer || '').split('\n')[0];
+    box.innerHTML = `<div class="ask-summary ${d.status === 'unknown' ? 'unknown' : ''}">${esc(d.results?.length ? header : d.answer)}</div><div class="ask-cards"></div>`;
+    renderCards(box.querySelector('.ask-cards'), d.results || []);
+  } catch (e) {
+    box.className = 'muted';
+    box.textContent = e instanceof TypeError
+      ? 'Local API offline — start it with: python3 -m crumbs.cli serve'
+      : `Ask failed: ${e.message}`;
   }
 }
 $('ask-btn').addEventListener('click', runAsk);

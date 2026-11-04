@@ -9,12 +9,28 @@ button, select { font: inherit; padding: 4px 10px; border-radius: 999px; border:
 button.on { background: #222; color: #fff; border-color: #222; }
 #main { flex: 1; display: flex; min-height: 0; }
 #map { flex: 1; min-width: 0; }
-#panel { width: 280px; border-left: 1px solid #ddd; display: flex; flex-direction: column; min-height: 0; }
+#panel { width: 380px; border-left: 1px solid #ddd; display: flex; flex-direction: column; min-height: 0; }
 #ask-box { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
 #ask-box .ask-row { display: flex; gap: 6px; }
 #ask-box input { flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; min-width: 0; }
 #ask-box button { padding: 6px 12px; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
-#ask-answer { margin-top: 8px; white-space: pre-wrap; line-height: 1.45; }
+#ask-answer { margin-top: 8px; line-height: 1.45; max-height: 62vh; overflow-y: auto; }
+.ask-summary { font-weight: 600; margin-bottom: 6px; }
+.ask-summary.unknown { font-weight: 400; color: #555; background: #f5f5f8; padding: 8px; border-radius: 6px; }
+.ask-card { border: 1px solid #e6e6ee; border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+.ask-head { margin-bottom: 6px; }
+.ask-head .src { font-size: 11px; color: #556; background: #eef0f6; border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+.ask-head .src.ok { background: #dff3e4; color: #1d6b34; }
+.ask-head .unnamed { color: #888; font-style: italic; }
+.thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 6px; }
+.thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; background: #eee; }
+.thumb-missing { font-size: 10px; color: #999; display: flex; align-items: center; justify-content: center; aspect-ratio: 1; background: #f3f3f3; border-radius: 4px; }
+.dishes { display: flex; flex-wrap: wrap; gap: 4px; }
+.dish { font-size: 12px; background: #fff4e8; border-radius: 6px; padding: 1px 6px; }
+.dish i { font-style: normal; font-size: 10px; color: #a06a2c; margin-left: 4px; }
+.review { margin-top: 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+#ask-box .review button { padding: 2px 10px; border-radius: 999px; }
+.review input { flex: 1; min-width: 80px; padding: 3px 6px; border: 1px solid #ccc; border-radius: 6px; font-size: 12px; }
 #photo-card { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 14px; }
 #photo-card img { width: 100%; border-radius: 8px; display: block; margin-bottom: 8px; }
 #photo-list { margin: 0; padding: 0 0 0 28px; overflow-y: auto; font-size: 13px; }

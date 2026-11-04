@@ -48,7 +48,7 @@ def main(argv=None) -> int:
     p_lab.add_argument("--port", type=int, default=8765)
     p_lab.add_argument("--host", default="127.0.0.1",
                        help="bind address (use 0.0.0.0 to label from a phone at http://<this-host>:<port>/)")
-    p_api = sub.add_parser("serve", help="read-only local API for the Muse bridge (API-01 v1)")
+    p_api = sub.add_parser("serve", help="local API for the PWA and Muse bridge (reads + review answers)")
     p_api.add_argument("--port", type=int, default=8770)
     p_api.add_argument("--host", default="127.0.0.1",
                        help="bind address; outside localhost requires CRUMBS_API_TOKEN")

@@ -107,6 +107,47 @@ class ApiTests(unittest.TestCase):
         with urllib.request.urlopen(req, timeout=3) as response:
             self.assertEqual(json.load(response), {"results": []})
 
+    def test_review_and_preview_routes_on_empty_store(self):
+        base = self.start_server()
+        auth = {"Authorization": "Bearer synthetic-test-token", "Content-Type": "application/json"}
+        req = urllib.request.Request(base + "/v1/review/999", method="POST", headers=auth,
+                                     data=json.dumps({"answer": "confirm"}).encode())
+        with self.assertRaises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(req, timeout=3)
+        self.assertEqual(err.exception.code, 400)
+        self.assertIn("no such question", json.load(err.exception)["error"])
+        with self.assertRaises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(urllib.request.Request(base + "/v1/media/999/preview", headers=auth), timeout=3)
+        self.assertEqual(err.exception.code, 404)
+        with urllib.request.urlopen(urllib.request.Request(base + "/v1/review", headers=auth), timeout=3) as r:
+            self.assertEqual(json.load(r), {"questions": []})
+
+    def test_tokenless_writes_refuse_foreign_origins(self):
+        import sqlite3
+        from crumbs import db
+
+        conn = sqlite3.connect(self.root / "synthetic.db", check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        db.init_schema(conn)
+        with patch.dict(os.environ, {"CRUMBS_API_TOKEN": ""}):
+            server = api.HTTPServer(("127.0.0.1", 0), api.make_handler(conn))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            for origin, code in (("http://synthetic-site.invalid", 403), ("http://127.0.0.1:5173", 400)):
+                req = urllib.request.Request(base + "/v1/review/1", method="POST", data=b'{"answer": "confirm"}',
+                                             headers={"Origin": origin, "Content-Type": "application/json"})
+                with self.subTest(origin=origin):
+                    with self.assertRaises(urllib.error.HTTPError) as err:
+                        urllib.request.urlopen(req, timeout=3)
+                    self.assertEqual(err.exception.code, code)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+            conn.close()
+
     def test_cli_rejects_unauthenticated_lan_bind(self):
         env = dict(os.environ, CRUMBS_DB=str(self.root / "cli.db"), CRUMBS_API_TOKEN="")
         result = subprocess.run([sys.executable, "-m", "crumbs.cli", "serve", "--host", "0.0.0.0", "--port", "0"],

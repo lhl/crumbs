@@ -19,7 +19,7 @@ import random
 import subprocess
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from crumbs import config, db
 
@@ -58,6 +58,11 @@ def main():
     ap.add_argument("--rows", type=int, default=36)
     ap.add_argument("--popin", type=float, default=3.5, help="seconds for all tiles to appear")
     ap.add_argument("--zoom", type=float, default=1.3, help="grid zoom reached at the swipe")
+    ap.add_argument("--zoom-start", type=float, default=None, help="seconds: hold the full grid until here (default: end of pop-in)")
+    ap.add_argument("--blur", type=float, nargs=3, metavar=("START", "FULL", "RADIUS"), default=None,
+                    help="seconds and px: blur ramps from START to FULL, reaching RADIUS")
+    ap.add_argument("--fade", type=float, nargs=3, metavar=("START", "FULL", "LEVEL"), default=None,
+                    help="seconds: brightness ramps down from START to FULL, ending at LEVEL (0-1)")
     ap.add_argument("--seed", type=int, default=7)
     a = ap.parse_args()
 
@@ -94,10 +99,20 @@ def main():
                     img.paste(tl, (x, y))
         else:
             img = full
-        z = 1 + (a.zoom - 1) * ease((t - a.popin) / max(0.1, a.swipe - a.popin))
+        z0 = a.popin if a.zoom_start is None else a.zoom_start
+        z = 1 + (a.zoom - 1) * ease((t - z0) / max(0.1, a.swipe - z0))
         cw, ch = canvas_w / z, canvas_h / z
         left, top = (canvas_w - cw) / 2, (canvas_h - ch) / 2
-        return img.resize((W, H), Image.LANCZOS, box=(left, top, left + cw, top + ch))
+        out = img.resize((W, H), Image.LANCZOS, box=(left, top, left + cw, top + ch))
+        if a.blur:
+            r = a.blur[2] * ease((t - a.blur[0]) / max(0.1, a.blur[1] - a.blur[0]))
+            if r > 0.3:
+                out = out.filter(ImageFilter.GaussianBlur(r))
+        if a.fade:
+            level = 1 - (1 - a.fade[2]) * ease((t - a.fade[0]) / max(0.1, a.fade[1] - a.fade[0]))
+            if level < 1:
+                out = Image.blend(Image.new("RGB", (W, H), (17, 17, 17)), out, level)
+        return out
 
     globe = sorted(Path(a.globe).glob("*.jpg"))
     out = Path(a.out)

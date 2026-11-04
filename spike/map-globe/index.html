@@ -10,7 +10,7 @@
   <body>
     <div id="app">
       <header>
-        <strong>🥖 Crumbs spike</strong>
+        <strong>🥖 Crumbs<span class="spike-tag"> spike</span></strong>
         <span class="muted">globe + flat map · photos · time trail</span>
         <span id="stats" class="muted"></span>
         <span id="fps" class="muted"></span>
@@ -20,6 +20,9 @@
         <div class="group" role="group" aria-label="Projection">
           <button id="btn-globe" class="on">🌐 Globe</button>
           <button id="btn-flat">🗺️ Flat map</button>
+        </div>
+        <div class="group">
+          <button id="btn-heat" title="Heatmap of every geotagged photo">🔥 Heatmap</button>
         </div>
         <div class="group">
           <label>Basemap

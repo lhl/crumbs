@@ -75,6 +75,11 @@ let playTimer = null;
 let thumbMarkers = [];
 
 const $ = (id) => document.getElementById(id);
+// ?demo=1: presentation chrome for the demo video (no spike/debug controls),
+// heatmap on, point clusters off. Same data, same map, same local tiles.
+const DEMO = new URLSearchParams(location.search).has('demo');
+if (DEMO) document.body.classList.add('demo');
+let heatOn = DEMO;
 
 const map = new maplibregl.Map({
   container: 'map',
@@ -124,6 +129,7 @@ function partialTrail(tripId, cutoffTime) {
 function refreshSources() {
   const list = visiblePhotos();
   map.getSource('photos')?.setData(toGeoJSON(list));
+  map.getSource('heat')?.setData(toGeoJSON(photos));
   for (const trip of TRIPS) {
     map.getSource(`trail-${trip.id}`)?.setData({
       type: 'Feature', geometry: { type: 'LineString', coordinates: trailFor(trip.id) },
@@ -202,6 +208,19 @@ function setProjection(kind) {
 }
 
 function addLayers() {
+  // Where-you-went heatmap over every geotagged photo (all trips), under the point layers.
+  map.addSource('heat', { type: 'geojson', data: toGeoJSON(photos) });
+  map.addLayer({ id: 'photo-heat', type: 'heatmap', source: 'heat',
+    layout: { visibility: heatOn ? 'visible' : 'none' },
+    paint: {
+      // Many photos share a spot (a meal is a dozen shots), so each point weighs little.
+      'heatmap-weight': 0.012,
+      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 0.5, 6, 1, 12, 2.5],
+      'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 7, 4, 14, 9, 22, 14, 30],
+      'heatmap-opacity': 0.85,
+      'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'],
+        0, 'rgba(255,183,3,0)', 0.1, 'rgba(255,183,3,0.6)', 0.35, '#fb8500', 0.65, '#e63946', 1, '#9d0208'],
+    } });
   map.addSource('photos', { type: 'geojson', data: toGeoJSON(visiblePhotos()), cluster: true, clusterRadius: 48, clusterMaxZoom: 13 });
   map.addLayer({ id: 'clusters', type: 'circle', source: 'photos', filter: ['has', 'point_count'],
     paint: { 'circle-color': '#4361ee', 'circle-opacity': 0.85, 'circle-radius': ['step', ['get', 'point_count'], 16, 50, 22, 250, 30] } });
@@ -215,6 +234,7 @@ function addLayers() {
     map.addLayer({ id: `trail-${trip.id}`, type: 'line', source: `trail-${trip.id}`,
       paint: { 'line-color': trip.color, 'line-width': 2.5, 'line-opacity': 0.35, 'line-dasharray': [2, 2] } });
   }
+  if (DEMO) for (const id of ['clusters', 'cluster-count', 'photo-points']) map.setLayoutProperty(id, 'visibility', 'none');
   map.addSource('trail-progress', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
   map.addLayer({ id: 'trail-progress', type: 'line', source: 'trail-progress',
     layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#111', 'line-width': 4, 'line-opacity': 0.85 } });
@@ -247,6 +267,13 @@ map.on('style.load', () => {
 
 // Controls
 $('btn-globe').addEventListener('click', () => setProjection('globe'));
+function setHeat(on) {
+  heatOn = on;
+  if (map.getLayer('photo-heat')) map.setLayoutProperty('photo-heat', 'visibility', on ? 'visible' : 'none');
+  $('btn-heat').classList.toggle('on', on);
+}
+$('btn-heat').addEventListener('click', () => setHeat(!heatOn));
+setHeat(heatOn);
 $('btn-flat').addEventListener('click', () => setProjection('flat'));
 $('style-select').addEventListener('change', (e) => map.setStyle(STYLES[e.target.value]));
 const tripSelect = $('trip-select');

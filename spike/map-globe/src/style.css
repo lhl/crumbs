@@ -48,3 +48,8 @@ button.on { background: #222; color: #fff; border-color: #222; }
 .thumb-marker img { width: 100%; height: 100%; display: block; }
 .thumb-marker.on { border-color: #e4572e; transform: scale(1.25); z-index: 2; }
 @media (max-width: 720px) { #panel { display: none; } }
+
+/* ?demo=1 presentation mode: hide spike/debug chrome, keep the map and Ask panel. */
+body.demo #controls, body.demo #stats, body.demo #fps, body.demo #tile-status, body.demo header .muted,
+body.demo .spike-tag, body.demo #photo-card, body.demo #photo-list, body.demo #timeline,
+body.demo .maplibregl-ctrl-top-right { display: none !important; }

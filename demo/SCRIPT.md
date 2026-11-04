@@ -1,35 +1,85 @@
 # Crumbs — 3-Minute Video Script (draft v2, for the lead's voice pass)
 
-Shooting script for the required 3-minute demo video. The lead records the voiceover; no synthetic narration. The narration is drafted in plain first person to be **rewritten into your own words**. Read it aloud once, then cross out anything you wouldn't say. [DEMO.md](DEMO.md) holds the measured numbers; [MODELS.md](MODELS.md) the model inventory.
+Shooting script for the required 3-minute demo video:
+- The lead records the voiceover; no synthetic narration. 
+- The narration is drafted in plain first person in my own words.
+- [DEMO.md](DEMO.md) holds the measured numbers; [MODELS.md](MODELS.md) the model inventory.
 
-**Shape.** Three acts: a personal hook, why it has to be local, and the Meta models that make local possible. Then a tight live demo and close. Most videos in this event demo features first. Ours argues a position first, then proves it on screen.
+## Crumbs
 
-**Placeholders.** `<DISH>`, `<CITY>`, `<PLACE>`, `<NEVER_CITY>` and similar stand for real queries chosen at rehearsal. The repo is public, so the concrete values stay in local rehearsal notes.
+0:00-0:30
 
-**Pace.** Narration below is about 420 words: about 2:50 at a relaxed conversational pace, so cut about 10% after your read-through. Every shot names the built feature behind it ("Built" column). Never add a shot of something that isn't built.
+[Scrolling through food photos]
 
-## Hook options (pick one for 0:00–0:20)
+I have tens of thousands of photos on my iPhone chronicling my life, including way too many food photos. But even for my most memorable meals, the default photo app makes it impossible for me to find the specifics, whether its giving a friend a recommendation, or remembering what I ordered the last time I was someplace. 
 
-| | Line | Footage |
-|---|---|---|
-| A (recommended) | "I have almost ten thousand photos from the last seven years. I can show you the best meal of my life. I can't tell you where it was. And I am not uploading my entire location history to someone's AI to find out." | Phone camera roll scroll, freeze on a dish photo. Hard cut to black on "not uploading". |
-| B | "Your photo library and your location history together know where you sleep, who you eat with, and when you're not home. That's exactly the data every AI memory app wants you to upload. I built one that doesn't." | Slow pan over a location-history heatmap, then it blurs out. |
-| C | "Every trip leaves crumbs: photos, receipts, a blue dot on a map. I wanted to follow them back, without handing them to anyone." | Breadcrumb trail drawing itself on the globe (▶ Play trail). |
+Like most people, I'm not exactly chuffed about uploading all of my photos and location history to AI services, so I built a app to solve this using local AI.
 
-## Script
+0:30-0:55
 
-| # | Time | Footage / cuts | Narration (draft; rewrite in your words) | Built |
-|---|---|---|---|---|
-| 1 | 0:00–0:20 | **Hook.** Per the option chosen above. | *(hook line)* | — |
-| 2 | 0:20–0:35 | **What it is.** Title "Crumbs" over the offline globe; zoom into one trip; ▶ Play trail draws the route. | "So I built Crumbs. It turns the photos and location history you already have into a searchable memory of where you went and what you ate, without writing a journal. This is my real history: 590 visits, rebuilt automatically." | PWA globe + trail (spike/map-globe); import, group |
-| 3 | 0:35–1:10 | **Why local.** (a) Location-history heatmap over a city, then blur/redact it. (b) Real footage of the Strix Halo box on the desk. (c) Screen: DevTools network panel with external requests blocked while the map renders: 0 external requests. (d) Terminal: `llama-server` serving Glimmer on the box. | "Here's the part I care about most. A photo library plus location history is the most complete record of your life there is: where you live, who you're with, when you're away. Most AI memory tools want all of it in their cloud, and to be useful they have to run all the time, in the background. An always-on cloud copy of my life is a liability I don't want. So every model in Crumbs runs on hardware I own. This box on my desk has 128 GB of unified memory and runs a 30-billion-parameter vision model. Even the map tiles are local files." | Local PMTiles (0 external requests, verified); Glimmer on llama.cpp (zbook) |
-| 4 | 1:10–1:45 | **The Meta model stack.** One card per model, building up a wall. Each card shows the model, its job, and one measured number, over B-roll of its output: Glimmer's extraction JSON from a menu, DINOv3 near-duplicate pairs, SAM 3.1 masks on a menu/sign, PE-Core zero-shot labels. End on the full wall with a "measured on our hardware" tag. | "That's only possible now because of open models, and almost everything here is from Meta. Muse Glimmer is the workhorse: it sorted all 9,669 photos and read the menus, signs and receipts in over 3,000 of them. On the food photos I checked by hand, it scored 0.976 F1. DINOv3 embeds every photo in about 50 milliseconds, for duplicates and similarity. We also tested SAM 3.1 for finding signs and menus, and Perception Encoder as a fast zero-shot classifier. We measured all of them on the same photos, and that's how we picked what each one does." | classify, extract, embed; SAM/PE measured (MODELS.md, DEMO.md) |
-| 5 | 1:45–2:15 | **Ask: Glimmer as an agent.** Ask panel with the "Muse Glimmer agent" toggle. Type *"where did I have `<DISH>` in `<CITY>`?"*, show "planning lookups…" for 1 s, then **jump cut** past the ~20 s wait. Answer appears; expand the trace (`search_dishes(…) → 1 found`); hover the photos, the dish chips (menu / seen) and the provenance badge. | "And then I can just ask. Glimmer works as an agent here: it decides which lookups to run over my index and writes a short answer. But the evidence never comes from the model. The cards come only from what the tools returned, and if Glimmer cites a visit that no tool returned, we strip it out." | AGT-02 v1 agent (`/v1/ask?agent=1`), Ask cards, photo previews |
-| 6 | 2:15–2:30 | **Evidence beats guessing.** Ask *"what was that `<DISH_2>` place in `<CITY_2>`?"* (jump cut). Zoom on the card: "`<GPS_GUESS>`? · nearby (GPS)", while the answer says the photo text reads `<REAL_NAME>`. | "This one's my favourite. GPS says I was next to `<GPS_GUESS>`. But Glimmer read `<REAL_NAME>` in my own photos, and it shows me both, labelled for what they are. It never names a restaurant just from what the food looks like." | Place provenance, photo-text names |
-| 7 | 2:30–2:42 | **Correct it / honest unknown.** Click **Yes** on "Was this `<PLACE>`?" and the card turns to "✓ you confirmed". Quick cut: *"have I been to `<NEVER_CITY>`?"* → "no record." | "When it's not sure, it asks me, and my answer is stored next to the model's guess, not over it. And when there's nothing there, it just says so." | Review answers (`POST /v1/review/<id>`); designed unknowns |
-| 8 | 2:42–3:00 | **Close.** Back to the globe, slowly zooming out. End card: "Crumbs: food first. Hotels and whole trips next." Repo URL. | "Food is first; hotel stays and full trip stories are next. Your photos already remember where you've been. Crumbs helps you find it, and it never has to leave your house." | — |
+[Globe, Heat Map (wanderings style)] rotating. [Photos pop up]
+[Crumbs]
 
-## Before recording
+It's called Crumbs.
+
+And it turns the photos and location history you already have into a searchable database of where you went and what you ate.
+
+*Now* you can ask it complex questions like "what was the name of the eel place I had lunch at in Kyoto, the day I went to Murin-an garden?" and off it goes.
+
+[Type exactly: `what was the name of the eel place I had lunch at in Kyoto, the day I went to Murin-an garden?` — Glimmer: find_photos(Murinan) → day_timeline(that day) → answer, ~30 s]
+
+0:55-1:23
+
+[Strix Halo Box; Graphs]
+
+This all runs locally on my AMD Strix Halo workstation.
+
+Muse Glimmer is the agent that turns natural language into lookups.
+
+The photos were all processed with open Meta models:
+- DINOv3 for near-duplicates
+- Glimmer's VLM for reading menus, signs, and categorization
+- I also tested SAM 3.1 for masking and object id and PE-Core for zero-shot labels. 
+
+Thanks Meta for all the open models.
+
+1:23-1:48
+
+[Accuracy Chart and Speed Table, split screen]
+
+On my hand-checked food photos, Glimmer scored a 0.976 F1, which is fantastic.
+
+And here are more result and speed details for the ML-inclined.  If you have 20 gigs of memory you can run Glimmer, and the rest of the models can be run on just about anything.
+
+One fun sidequest, I also tested turning Glimmer into a Decision Model with AnyJev, which is actually pretty viable.
+
+1:48-2:15
+[Geo Architecture]
+
+Location data is the other part. I extract the EXIF GPS data and use OpenStreetMapss for place registry and vector basemaps and also GeoNames for reverse-geocoding. 
+
+I have years of GeoJSON as well that I use to augment my location history. 
+
+Crumbs is designed so more metadata can be added from different sources, from checkins, trip itineraries, health activity or anything else you have.
+
+
+2:15-3:00
+
+[Show results]
+
+And here we go: Crumbs found my Murin-an photos, went through the rest of that day, and read the sign in my lunch photos: 
+Kyo Unawa Jingumichi. It was a solid hitsumabushi, overall good cospa.
+
+
+You might have noticed that I asked my question through Buddy, my Muse agent. That's actually on purpose since I wanted to show that *you* can decide what lines you want to draw on your data - my full archive stays on my box, but I don't care if individual query results go out.
+
+So that's Crumbs. your most personal memories, safely searchable. 
+
+Food is first, hotels and trips are next.
+
+
+
+
 
 - **Footage consent.** Use only the owner-consented subset (or the synthetic set). Check every visible thumbnail, the heatmap and every map zoom for faces or bystanders, licence plates, and anything near home or work. The heatmap in shot 3 must be blurred or shown at a scale that reveals no address. Raw coordinates must never be on screen.
 - **Shot 3 network proof.** Record DevTools with non-localhost requests blocked, as in the spike's verification. This proves the *map* is local. Don't frame it as proof that the whole pipeline is offline (see guardrails).

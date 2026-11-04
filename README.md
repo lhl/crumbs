@@ -2,7 +2,7 @@
 
 Crumbs turns the photos and location history you already have into a searchable database of where you went and what you ate. Every model runs on your own hardware.
 
-I have tens of thousands of photos on my iPhone, including way too many food photos. Even for my most memorable meals, the default photo app makes it nearly impossible to find the specifics, whether it's for giving a friend a recommendation or remembering what I ordered the last time I was there. Like most people, I'm not keen on uploading all my photos and location history to AI services, so I built this with local AI instead.
+Crumbs was built to solve a specific problem - with very large photo libraries (thousands, tens of thousands of food photos), the default photo search is basically useless for search and retrieval, eg trying to give a friend a reocmmendation, remembering where you went, or what you ate/ordered last time you were there. At the ame time, I wanted to have advanced AI-driven functionality *without* having to upload all of my photos and location to a third party, hence why Crumbs is backed by local AI for its functionality.
 
 Crumbs was built for the [Meta Global AI Developer Hackathon](HACKATHON.md) (Oct 27 – Nov 4, 2026). It covers food first; hotel stays and trip stories are next.
 
@@ -31,8 +31,8 @@ DINOv3: embeddings, near-duplicates ──────────────�
 OpenStreetMap places (cached) ─► place candidates ────┘
 ```
 
-- **Provenance:** every record is marked *observed* (EXIF, GPS), *inferred* (a model read it), *lookup* (map data), or *confirmed* (you said so). A restaurant name comes from text in your photos, from GPS plus the map, or from you, and the answer says which. Crumbs never names a restaurant from what the food looks like.
-- **Review questions:** when the evidence is thin, Crumbs asks you ("Was this X?"). Your answer is stored next to the model's guess, not over it.
+- **Provenance:** records are marked *observed* (EXIF, GPS), *inferred* (a model read it), *lookup* (map data), or *confirmed* (you said so). 
+- **Review questions:** when the evidence is thin, Crumbs asks you ("Was this X?"). Your answer is stored next to the model's guess.
 - **Citations:** the Ask agent plans lookups with tool calls and cites the visits and photos the tools returned. Any citation no tool returned is removed.
 
 ### Location data
@@ -60,9 +60,8 @@ Full numbers, engines and caveats are in [MODELS.md](MODELS.md).
 ## Privacy
 
 - **Stays on your box:** photos, EXIF/GPS, location history, the database, and all model inference. The map uses local PMTiles, and the map view makes zero external requests.
-- **What you choose to share:** the optional [Muse bridge](docs/muse/SETUP.md) lets a Muse agent (mine is called Buddy) ask Crumbs questions over your private tailnet, using a read-only token capped at a redacted privacy tier. The full archive stays on the box; only the answers to those questions go out.
+- **What you choose to share:** the optional [Muse bridge](docs/muse/SETUP.md) lets a Muse agent ask Crumbs questions over your private tailnet, using a read-only token capped at a redacted privacy tier. The full archive stays on the box; only the answers to those questions go out.
 - **Network lookup:** `places-fetch` asks OpenStreetMap's Overpass service for restaurants around your food visits and caches the results locally. That reveals the areas queried, but no photos or history. An offline map-data importer is planned.
-- **During development:** one comparison run sent sample photos to a hosted model API, by explicit decision, and bulk passes ran on our own PRO 6000 box.
 
 ## Run it
 
@@ -101,12 +100,4 @@ Your data lives in the git-ignored `data/` directory. `crumbs --help` lists ever
 
 Everything here was built during the hackathon's building period (Oct 27 – Nov 4, 2026). The worklog records each unit with its validation.
 
-Most of the implementation was done with Meta's **Muse Wonder Full (max)** until its credits ran out. Additional implementation models were **Claude Opus 5.5**, plus **GPT-6.1 Sol** and **DeepSeek V4.1 Flash 1017** running in our [Jouzu](https://jouzu.dev) harness.
-
-## Not built
-
-These are next, and the demo does not show them as working:
-- voice questions;
-- background organising as new photos arrive;
-- a taste profile;
-- hotel and trip stories.
+Most of the implementation was done with Meta's **Muse Wonder Full (max)** until its credits ran out. Additional implementation models were **Claude Opus 5.5**, plus **GPT-6.1 Sol** and **DeepSeek V4.1 Flash 1017** running in our [Jouzu](https://jouzu.dev) coding harness.

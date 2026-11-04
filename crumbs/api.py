@@ -25,6 +25,8 @@ import hmac
 import ipaddress
 import json
 import os
+import re
+import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -110,7 +112,18 @@ def make_handler(conn):
                 return "owner"  # localhost dev: no tokens configured
             if token and hmac.compare_digest(supplied, f"Bearer {token}".encode()):
                 return "owner"
+            self._log_rejected(supplied.decode(errors="replace"))
             return None
+
+        def _log_rejected(self, header):
+            """One stderr line per rejected credential, without any token characters:
+            scheme, value length, and whether it is a platform placeholder ('word:...')."""
+            scheme, _, value = header.partition(" ")
+            m = re.match(r"([A-Za-z]{2,12}):", value)
+            kind = f"placeholder '{m.group(1)}:'" if m else ("empty" if not value else "unrecognized token")
+            sys.stderr.write(f"{datetime.now().isoformat(timespec='seconds')} auth rejected from {self.client_address[0]} "
+                             f"{self.command} {urlparse(self.path).path}: scheme={scheme or '-'} len={len(value)} {kind}\n")
+            sys.stderr.flush()
 
         def _authed(self):
             return self._role() is not None

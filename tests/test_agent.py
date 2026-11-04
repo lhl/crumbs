@@ -152,6 +152,7 @@ class AnchoredRecallTests(unittest.TestCase):
         timeline = json.loads(fake.sent[2]["messages"][-1]["content"])["moments"]
         self.assertEqual([m["time"] for m in timeline], ["10:00-10:00", "12:46-13:02", "16:40-16:41"])
         self.assertEqual(timeline[1]["photo_id"], 43)
+        self.assertEqual(timeline[1]["text_photo_ids"], [42])  # the sign, offered for a closer look
         self.assertEqual(r["agent"]["grounding"]["unsupported_photos_removed"], [99999])
         self.assertNotIn("[p99999]", r["answer"])
         card = r["results"][0]
@@ -170,10 +171,24 @@ class AnchoredRecallTests(unittest.TestCase):
                            {"content": "", "tool_calls": [call("look_at_photos", photo_ids=[44], question="ice?")]},
                            {"content": "Shaved ice [p44]."})
         r = run_agent(self.conn, "the shaved ice that day?", chat=fake, vision=vision)
-        self.assertIn("only photo_id values", json.loads(fake.sent[1]["messages"][-1]["content"])["error"])
+        self.assertIn("only photo_id or text_photo_ids", json.loads(fake.sent[1]["messages"][-1]["content"])["error"])
         self.assertEqual(looked, [44])
         self.assertIn({"step": "look", "seen": ["a bowl of shaved ice"]}, r["agent"]["trace"])
         self.assertEqual(r["results"][0]["photo_id"], 44)
+
+    def test_name_check_looks_at_the_sign_photo_itself(self):
+        looked = []
+
+        def vision(conn, media_id, question):
+            looked.append(media_id)
+            return "SYNTH EEL HOUSE"
+        fake = FakeGlimmer({"content": "", "tool_calls": [call("day_timeline", date="2025-11-26")]},
+                           {"content": "", "tool_calls": [call("look_at_photos", photo_ids=[42], question="name?")]},
+                           {"content": "A closer look reads SYNTH EEL HOUSE [p42]."})
+        r = run_agent(self.conn, "the eel place that day?", chat=fake, vision=vision)
+        self.assertEqual(looked, [42])  # the text photo, not the moment's food photo
+        self.assertEqual(fake.sent[-1]["tools"], [])  # after a look, the next turn only answers
+        self.assertEqual(r["results"][0]["moment"], "12:46–13:02")
 
 
 if __name__ == "__main__":

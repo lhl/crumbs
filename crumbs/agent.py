@@ -41,7 +41,8 @@ from .places import haversine_m, search_name
 MAX_ROUNDS = 5
 MAX_CARDS = 6
 MAX_MOMENTS = 18
-MAX_LOOKS = 2
+MAX_LOOKS = 3
+MAX_TOKENS = 4096
 SKILL = (Path(__file__).parent / "skills" / "recall.md").read_text(encoding="utf-8")
 
 SYSTEM = """You are Crumbs, a private assistant over the user's own food and travel history, \
@@ -219,11 +220,13 @@ class Tools:
             self.cards.setdefault(vid, visit_card(self.conn, vid, self.ex))
             moments += [x for x in visit_moments(self.conn, vid, self.ex)
                         if x["date"] == m.group(1) and (x["food"] or x["names"] or x["dishes"])]
-        self.photos.update(x["photo_id"] for x in moments[:MAX_MOMENTS])
+        for x in moments[:MAX_MOMENTS]:
+            self.photos.update([x["photo_id"], *x["text_photos"][:3]])
         return {"date": m.group(1), "moments": [moment_line(x) for x in moments[:MAX_MOMENTS]],
                 "total_found": len(moments),
                 "note": "each moment is photos close in time; photo_id cites it as [p<photo_id>]. If a moment "
-                        "matches the question, answer now in 1-2 sentences: no further lookups are needed."}
+                        "matches the question, check its name with look_at_photos on its text_photo_ids, "
+                        "then answer in 1-2 sentences; no other lookups are needed."}
 
     def look_at_photos(self, photo_ids=(), question=""):
         if isinstance(photo_ids, (int, str)):
@@ -234,18 +237,19 @@ class Tools:
             return {"error": "photo_ids must be integers"}
         unknown = [p for p in ids if p not in self.photos]
         if not ids or unknown:
-            return {"error": "only photo_id values returned by find_photos or day_timeline can be looked at"}
+            return {"error": "only photo_id or text_photo_ids values returned by find_photos or day_timeline "
+                             "can be looked at"}
         out = []
         for pid in ids:
-            card = moment_card(self.conn, self.ex, pid)
-            looks = card["media"][:1] if card else [pid]  # the moment's best food photo
             try:
-                seen = self.vision(self.conn, looks[0], question or "What is visible?")
+                seen = self.vision(self.conn, pid, question or "What is visible?")
             except Exception as e:  # vision is best-effort evidence, never fatal
                 seen = f"(could not look: {type(e).__name__})"
-            out.append({"photo_id": pid, "looked_at": looks[0], "seen": seen})
+            out.append({"photo_id": pid, "seen": seen})
         return {"observations": out, "total_found": len(out),
-                "note": "model observation of the photo, not a verified fact"}
+                "note": "model observation of the photo, not a verified fact. Where it reads a name clearly, "
+                        "report that reading as the name rather than the stored photo text, which can misread "
+                        "small print."}
 
     def visits_near_me(self):
         if self.lat is None:
@@ -269,7 +273,10 @@ class Tools:
 
 
 def _chat(messages, tools, tool_choice="auto", timeout=180):
-    body = {"messages": messages, "max_tokens": 700,
+    # Glimmer reasons before answering even with reasoning_effort "none", and the
+    # reasoning counts against max_tokens: at 700 an answer turn was cut off mid-sentence.
+    # Prompts stay near 3k tokens, so 4096 fits the served 8k context.
+    body = {"messages": messages, "max_tokens": MAX_TOKENS,
             "temperature": 0.2, "chat_template_kwargs": {"reasoning_effort": "none"}}
     if tools:
         # With no tools offered, nothing is sent: llama.cpp's tool-call parser rejects
@@ -284,12 +291,17 @@ def _chat(messages, tools, tool_choice="auto", timeout=180):
 
 
 def _vision(conn, media_id, question, timeout=120):
-    """One photo, one question, answered by Glimmer's vision (local preview only)."""
-    from .label_server import ensure_preview  # local import: keeps agent import light
+    """One photo, one question, answered by Glimmer's vision on the local analysis
+    image (1024 px). The 640 px preview is too small to read small print reliably:
+    on a chopstick-sleeve name it misread a character the analysis image got right."""
     h = conn.execute("SELECT content_hash FROM media_items WHERE id = ?", (media_id,)).fetchone()
     if not h:
         return "(no such photo)"
-    b64 = base64.b64encode(ensure_preview(h[0]).read_bytes()).decode()
+    path = config.ANALYSIS_DIR / f"{h[0]}.jpg"
+    if not path.exists():
+        from .label_server import ensure_preview  # local import: keeps agent import light
+        path = ensure_preview(h[0])
+    b64 = base64.b64encode(path.read_bytes()).decode()
     messages = [{"role": "system", "content": "Describe only what is visible in the photo. Answer in one short "
                  "sentence. Copy any visible shop or restaurant name exactly; do not guess names."},
                 {"role": "user", "content": [
@@ -310,11 +322,16 @@ def run_agent(conn, question: str, lat=None, lon=None, chat=_chat, vision=None) 
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": question}]
     trace, text, error = [], "", None
 
+    looked = False  # set once a look_at_photos call has returned observations
+
     def ask_model(choice):
         for attempt in (1, 2):  # one retry: llama.cpp occasionally 500s on a turn
             try:
                 if choice == "none":  # answer-only turn: offer no tools at all
-                    return chat(messages + [{"role": "user", "content": "Answer now from the tool results above."}],
+                    nudge = "Answer now from the tool results above."
+                    if looked:
+                        nudge += " Lead with the name the closer look reads, citing that moment's [p<photo_id>]."
+                    return chat(messages + [{"role": "user", "content": nudge}],
                                 [], tool_choice="none")
                 return chat(messages, specs, tool_choice=choice)
             except urllib.error.HTTPError:
@@ -323,7 +340,7 @@ def run_agent(conn, question: str, lat=None, lon=None, chat=_chat, vision=None) 
 
     try:
         for rnd in range(MAX_ROUNDS + 1):
-            last = rnd == MAX_ROUNDS
+            last = rnd == MAX_ROUNDS or looked  # a closer look is the final evidence step
             t = time.time()
             msg = ask_model("none" if last else "auto")
             calls = [] if last else (msg.get("tool_calls") or [])
@@ -344,6 +361,7 @@ def run_agent(conn, question: str, lat=None, lon=None, chat=_chat, vision=None) 
                 result = tools.call(name, args)
                 found = result.get("total_found", 1 if name == "visit_details" and "error" not in result else None)
                 if name == "look_at_photos":
+                    looked = looked or bool(result.get("observations"))
                     trace.append({"step": "look", "seen": [o["seen"] for o in result.get("observations", [])]})
                 trace.append({"step": "tool", "tool": name, "args": args, "found": found, "error": result.get("error")})
                 messages.append({"role": "tool", "tool_call_id": c.get("id", name), "name": name,

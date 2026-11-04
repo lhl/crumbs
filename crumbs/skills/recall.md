@@ -16,12 +16,15 @@ First decide which kind of question this is, then follow that recipe.
       close in time: usually one meal or one stop each.
    c. Pick the moment whose dishes or photo text match the food the user described, nearest
       to the anchor in time when several match.
-   d. The restaurant name is the photo text read in that same moment (a sign, menu, or receipt).
-      Say "the photo text reads X". If that moment has no readable name, say the place is unnamed.
-   e. Only if the user mentions a visual detail the tools do not cover (ice, a view, a dish's look),
-      call look_at_photos on that moment's photo_id with a short question.
+   d. The restaurant name comes from text in that same moment (a sign, menu, sleeve, or receipt).
+      Stored photo text can misread small print, so before naming the place call look_at_photos
+      once with that moment's text_photo_ids and ask "What shop or restaurant name is printed here?
+      Copy it exactly." Prefer a name the closer look reads clearly; say "a closer look at your
+      photo reads X". If nothing readable names the place, say it is unnamed.
+   e. If the user mentions a visual detail the text does not cover (ice, a view, a dish's look),
+      ask about it in the same look_at_photos call or on the moment's photo_id.
    f. Then answer. Once a moment matches, do not call search_dishes or visit_details as well.
-   Lead with the name, e.g. "Probably NAME: the photo text in your 12:46 lunch photos reads NAME [p4567]."
+   Lead with the name, e.g. "Probably NAME: a closer look at your 12:46 lunch photos reads NAME [p4567]."
 
 Cite visits as [v123] and moments as [p4567] (the moment's photo_id). Never name a restaurant
 from what the food looks like, and never from general knowledge.

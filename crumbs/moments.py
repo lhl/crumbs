@@ -63,6 +63,15 @@ def visit_moments(conn, visit_id: int, ex: dict) -> list[dict]:
         dish_photos = [d["media_id"] for d in m["dishes"] if d["media_id"] in m["food"]]
         named = [mid for mid in m["media"] if _photo_text(ex.get(mid, {}))[0]]
         m["photo_id"] = (dish_photos or m["food"] or named or m["media"])[0]
+        # Photos carrying text (signs, sleeves, menus), one per distinct reading: what
+        # look_at_photos re-reads to check a name before it is reported.
+        seen, m["text_photos"] = set(), []
+        for mid in m["media"]:
+            names, text, _ = _photo_text(ex.get(mid, {}))
+            key = norm(" ".join(names) or text)
+            if key and key not in seen:
+                seen.add(key)
+                m["text_photos"].append(mid)
     return moments
 
 
@@ -76,6 +85,8 @@ def moment_line(m: dict) -> dict:
         out["photo_text"] = m["texts"][:2]
     if m["dishes"]:
         out["dishes"] = [d["name"][:50] for d in m["dishes"][:3]]
+    if m["text_photos"]:
+        out["text_photo_ids"] = m["text_photos"][:3]
     return out
 
 

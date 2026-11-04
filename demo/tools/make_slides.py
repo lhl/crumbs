@@ -75,7 +75,6 @@ def bar(v, top=1.0, grey=False, width=110):
 
 RESULTS = f"""<html><head><style>{CSS}</style></head><body>
 <h1>Accuracy &amp; speed</h1>
-<div class="sub">Measured on my photos and hardware</div>
 <div class="cols">
 <div>
 <h2>Food photo F1<small>61 hand-verified food photos (from a 440-photo labeled sample)</small></h2>
@@ -83,7 +82,7 @@ RESULTS = f"""<html><head><style>{CSS}</style></head><body>
 <tr><th>Model</th><th>Setup</th><th></th><th class="num">F1</th></tr>
 <tr class="hl"><td class="m">Muse Glimmer</td><td><code>Q4_K_M</code> · Strix Halo</td><td>{bar(0.976)}</td><td class="num">0.976</td></tr>
 <tr><td class="m">Muse Glimmer</td><td><code>FP8</code> · PRO 6000</td><td>{bar(0.930)}</td><td class="num">0.930</td></tr>
-<tr><td class="m">Glimmer, decision read</td><td>no training</td><td>{bar(0.877)}</td><td class="num">0.877</td></tr>
+<tr><td class="m">Muse Glimmer (Decision)</td><td>AnyJev</td><td>{bar(0.877)}</td><td class="num">0.877</td></tr>
 <tr><td>Shisa DE-2.1 <span class="role" style="display:inline">(comparator)</span></td><td><code>Q4_K_M</code> local</td><td>{bar(0.893, grey=True)}</td><td class="num">0.893</td></tr>
 <tr><td class="m">PE-Core G14</td><td>zero-shot</td><td>{bar(0.545)}</td><td class="num">0.545</td></tr>
 <tr><td class="m">PE-Core L14</td><td>zero-shot</td><td>{bar(0.526)}</td><td class="num">0.526</td></tr>

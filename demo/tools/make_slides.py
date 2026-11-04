@@ -1,0 +1,130 @@
+"""Render the demo video's model and results slides to 1920x1080 PNGs.
+
+Every number here comes from MODELS.md (measured on our hardware, with the
+worklog entries cited there); keep the two in sync. Output goes to the
+git-ignored demo/video/slides/ directory.
+
+Usage: python3 demo/tools/make_slides.py demo/video/slides
+"""
+
+import sys
+from pathlib import Path
+
+from playwright.sync_api import sync_playwright
+
+CSS = """
+* { box-sizing: border-box; margin: 0; }
+body { width: 1920px; height: 1080px; background: #fbf8f3; color: #1b1b1b;
+  font-family: 'Inter', 'Noto Sans', system-ui, sans-serif; padding: 72px 96px; }
+h1 { font-size: 58px; font-weight: 800; letter-spacing: -0.5px; }
+h1 .accent { color: #e63946; }
+.sub { font-size: 26px; color: #6b6b6b; margin-top: 10px; }
+table { border-collapse: collapse; width: 100%; margin-top: 36px; font-size: 27px; }
+th { text-align: left; font-size: 19px; text-transform: uppercase; letter-spacing: 1.2px; color: #8a8a8a;
+  font-weight: 700; padding: 0 18px 14px; border-bottom: 2px solid #1b1b1b; }
+td { padding: 20px 18px; border-bottom: 1px solid #e3ddd3; vertical-align: middle; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.m { font-weight: 700; }
+.role { display: block; font-size: 20px; color: #777; font-weight: 400; margin-top: 4px; }
+.chip { display: inline-block; font-size: 16px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  margin-left: 10px; vertical-align: 3px; letter-spacing: .5px; }
+.live { background: #e63946; color: #fff; }
+.tested { background: #e9e4dc; color: #555; }
+code { font-family: 'JetBrains Mono', 'Noto Sans Mono', monospace; font-size: 25px; background: #efe9df;
+  padding: 2px 8px; border-radius: 6px; }
+.foot { position: absolute; left: 96px; right: 96px; bottom: 56px; font-size: 19px; color: #8a8a8a; line-height: 1.5; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; margin-top: 8px; }
+.cols h2 { font-size: 30px; margin-top: 34px; }
+.cols h2 small { font-weight: 400; color: #8a8a8a; font-size: 21px; display: block; margin-top: 4px; }
+.cols table { font-size: 24px; margin-top: 18px; }
+.cols td { padding: 14px 10px; white-space: nowrap; }
+.cols th { padding: 0 12px 10px; font-size: 16px; }
+tr.hl td { background: #fde8e9; }
+.bar { display: inline-block; height: 14px; background: #e63946; border-radius: 7px; vertical-align: middle; margin-right: 12px; }
+.bar.grey { background: #c9c1b5; }
+.note { margin-top: 22px; font-size: 21px; color: #555; background: #f1ece4; border-radius: 12px; padding: 16px 20px; line-height: 1.45; }
+"""
+
+MODELS = f"""<html><head><style>{CSS}</style></head><body>
+<h1>Open <span class="accent">Meta</span> models, on my own hardware</h1>
+<div class="sub">Everything below runs locally on an AMD Strix Halo box (Radeon 8060S, 128 GB unified memory)</div>
+<table>
+<tr><th>Model</th><th class="num">Parameters</th><th class="num">Size (GB)</th><th>Precision</th><th>License</th></tr>
+<tr><td><span class="m">Muse Glimmer 30B</span><span class="chip live">IN PIPELINE</span>
+  <span class="role">Classifies photos, reads menus &amp; signs, plans Ask lookups</span></td>
+  <td class="num">30B</td><td class="num">19.8</td><td><code>Q4_K_M</code> GGUF</td><td>Apache 2.0</td></tr>
+<tr><td><span class="m">DINOv3 ViT-L/16</span><span class="chip live">IN PIPELINE</span>
+  <span class="role">Photo embeddings: near-duplicates and similarity</span></td>
+  <td class="num">303M</td><td class="num">1.21</td><td><code>FP32</code></td><td>DINOv3 License</td></tr>
+<tr><td><span class="m">SAM 3.1</span><span class="chip tested">TESTED</span>
+  <span class="role">Masks for signs, menus, receipts, dishes</span></td>
+  <td class="num">848M</td><td class="num">1.68</td><td><code>BF16</code></td><td>SAM License</td></tr>
+<tr><td><span class="m">PE-Core L14-336</span><span class="chip tested">TESTED</span>
+  <span class="role">Zero-shot photo labels</span></td>
+  <td class="num">0.32B<sup>†</sup></td><td class="num">2.6</td><td>not recorded</td><td>Apache 2.0</td></tr>
+<tr><td><span class="m">PE-Core G14-448</span><span class="chip tested">TESTED</span>
+  <span class="role">Zero-shot photo labels (large)</span></td>
+  <td class="num">1.88B<sup>†</sup></td><td class="num">9.1</td><td>not recorded</td><td>Apache 2.0</td></tr>
+</table>
+<div class="foot">Glimmer 19.8 GB = 16.76 GB model + 1.40 GB vision tower + 1.63 GB DFlash draft (all Q4_K_M).
+† Vision encoder parameters; PE sizes are the published checkpoint sizes. Tested = measured on our photos, not in the shipped pipeline.</div>
+</body></html>"""
+
+
+def bar(v, top=1.0, grey=False, width=110):
+    return f'<span class="bar{" grey" if grey else ""}" style="width:{round(width * v / top)}px"></span>'
+
+
+RESULTS = f"""<html><head><style>{CSS}</style></head><body>
+<h1>Accuracy &amp; speed</h1>
+<div class="sub">Measured on my photos and hardware</div>
+<div class="cols">
+<div>
+<h2>Food photo F1<small>61 hand-verified food photos (from a 440-photo labeled sample)</small></h2>
+<table>
+<tr><th>Model</th><th>Setup</th><th></th><th class="num">F1</th></tr>
+<tr class="hl"><td class="m">Muse Glimmer</td><td><code>Q4_K_M</code> · Strix Halo</td><td>{bar(0.976)}</td><td class="num">0.976</td></tr>
+<tr><td class="m">Muse Glimmer</td><td><code>FP8</code> · PRO 6000</td><td>{bar(0.930)}</td><td class="num">0.930</td></tr>
+<tr><td class="m">Glimmer, decision read</td><td>no training</td><td>{bar(0.877)}</td><td class="num">0.877</td></tr>
+<tr><td>Shisa DE-2.1 <span class="role" style="display:inline">(comparator)</span></td><td><code>Q4_K_M</code> local</td><td>{bar(0.893, grey=True)}</td><td class="num">0.893</td></tr>
+<tr><td class="m">PE-Core G14</td><td>zero-shot</td><td>{bar(0.545)}</td><td class="num">0.545</td></tr>
+<tr><td class="m">PE-Core L14</td><td>zero-shot</td><td>{bar(0.526)}</td><td class="num">0.526</td></tr>
+</table>
+<div class="note"><b>Side quest:</b> Glimmer as a decision model with AnyJev-style restricted reads, no training:
+JevBench <b>76.6%</b> (raw read, 231 items) · Decision Index 0.3 skill <b>32.60</b>. Not leaderboard submissions.</div>
+</div>
+<div>
+<h2>Seconds per photo<small>Strix Halo APU vs a 4× RTX PRO 6000 box (burst capacity)</small></h2>
+<table>
+<tr><th>Pass</th><th class="num">Strix Halo</th><th class="num">PRO 6000</th></tr>
+<tr><td class="m">Glimmer read &amp; classify</td><td class="num">19.4</td><td class="num">0.30<sup>a</sup></td></tr>
+<tr><td class="m">Glimmer decision read</td><td class="num">2.69</td><td class="num">0.19</td></tr>
+<tr><td class="m">SAM 3.1, 5 prompts</td><td class="num">2.83</td><td class="num">0.24<sup>b</sup></td></tr>
+<tr><td class="m">PE-Core L14 zero-shot</td><td class="num">0.14</td><td class="num">—</td></tr>
+<tr><td class="m">DINOv3 ViT-L embedding</td><td class="num">0.049</td><td class="num">—</td></tr>
+<tr><td class="m">Ask agent, one question</td><td class="num">17–80</td><td class="num">—</td></tr>
+</table>
+<div class="note">Whole library (9,669 photos) classified on the PRO 6000 box in ~12 min. Glimmer at <code>Q4_K_M</code> is 19.8 GB on disk; the other models are 1.2–9.1 GB.</div>
+</div>
+</div>
+<div class="foot">a: FP8, 640 px previews, per replica at 16 concurrent. b: 640 px, per server. Strix Halo runs: llama.cpp (Glimmer) and ROCm PyTorch, 1024 px.
+Ask agent: 1–3 lookups plus photo checks, per question.</div>
+</body></html>"""
+
+
+def main(out_dir):
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as p:
+        b = p.chromium.launch(executable_path="/usr/bin/chromium")
+        page = b.new_page(viewport={"width": 1920, "height": 1080})
+        for name, html in (("models", MODELS), ("results", RESULTS)):
+            page.set_content(html)
+            page.wait_for_timeout(300)
+            page.screenshot(path=str(out / f"{name}.png"))
+            print(out / f"{name}.png")
+        b.close()
+
+
+if __name__ == "__main__":
+    main(sys.argv[1] if len(sys.argv) > 1 else "demo/video/slides")

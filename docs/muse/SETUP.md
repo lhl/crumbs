@@ -10,6 +10,8 @@ Use your tailnet (Tailscale or Headscale). Do not open a public port.
 
 - Join the Crumbs machine and the Muse agent's VM to the same tailnet.
 - Add an ACL that lets only the Muse VM reach the Crumbs machine on TCP 8770.
+- Use the Crumbs machine's MagicDNS name, not its IP, everywhere: the IP can change when a
+  device rejoins, and Muse approves each exact address form separately.
 
 ## 2. Create two tokens
 
@@ -29,26 +31,32 @@ Put both in the Crumbs machine's `.env` or environment, never in git.
 CRUMBS_API_TOKEN=... CRUMBS_AGENT_TOKEN=... crumbs serve --host <tailnet IP of this machine>
 ```
 
+This can run alongside a token-free `crumbs serve` on 127.0.0.1 for the local PWA: the two
+bind different addresses and read the same database.
+
 A non-loopback bind refuses to start without `CRUMBS_API_TOKEN`. The Glimmer server
 must also be reachable from this machine (`GLIMMER_URL`, default `http://127.0.0.1:18080`).
 
 ## 4. Configure the Muse agent
 
-- Store `CRUMBS_URL` (`http://<tailnet IP>:8770`) and `CRUMBS_AGENT_TOKEN` in the agent's
-  vault or secret store.
-- Give it [crumbs-skill.md](crumbs-skill.md) as a persisted skill.
+- The base URL (`http://<MagicDNS name>:8770`) goes in the agent's plain configuration.
+- Enter `CRUMBS_AGENT_TOKEN` through the agent platform's secure credential form, registered to
+  that one host as a Bearer header. On Muse a helper sends a placeholder that is swapped for the
+  real token only on requests to that host, so the token never appears in commands or chat.
+- Give it [crumbs-skill.md](crumbs-skill.md) as a persisted skill (Muse repackages the
+  "how to call" parts as helper commands).
 - Set its HTTP timeout to at least 120 s: agent answers take 30 to 90 s.
 
 ## 5. Check it
 
-From the Muse VM:
+From the Muse side, through its helper:
 
-```bash
-curl -s $CRUMBS_URL/v1/health
-curl -s -H "Authorization: Bearer $CRUMBS_AGENT_TOKEN" "$CRUMBS_URL/v1/ask?q=what%20did%20I%20eat%20in%20Kyoto%3F"
-```
-
-Then ask the agent a question in chat, for example "where did I have soup dumplings in Taipei?".
+1. `GET /v1/health` with no auth: expect `{"status": "ok", ...}`.
+2. One harmless authenticated call, e.g. `GET /v1/places?q=cafe`: this proves the credential
+   swap works through the tunnel.
+3. Chat tests: a known question ("where did I have soup dumplings in Taipei?"), an unknown one
+   ("have I been to Paris?"), and an offline case (stop the server: the agent must say Crumbs is
+   offline, not guess).
 
 ## What crosses the line
 

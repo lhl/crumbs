@@ -152,6 +152,15 @@ class ApiTests(unittest.TestCase):
             self.assertEqual((owner["lat"], owner["rel_path"]), (35.011634, "synthetic/a.jpg"))
             self.assertEqual(agent["lat"], 35.01)  # rounded: tier capped at 1
             self.assertNotIn("rel_path", agent)
+            with patch("crumbs.agent.run_agent", return_value={
+                    "status": "answered", "answer": "synthetic", "results": [{"visit_id": i} for i in range(15)],
+                    "agent": {"used": True, "latency_s": 1.0, "error": None,
+                              "trace": [{"step": "tool", "tool": "search_dishes"}, {"step": "answer"}]}}):
+                a = get("/v1/ask?q=synthetic&agent=1&near=current", "synthetic-agent")
+                o = get("/v1/ask?q=synthetic&agent=1", "synthetic-owner")
+            self.assertEqual((len(a["results"]), a["agent"]), (10, {"used": True, "latency_s": 1.0, "error": None, "lookups": 1}))
+            self.assertEqual(a["current_location"], {"as_of": None, "age_s": None})  # phone never posted
+            self.assertEqual((len(o["results"]), len(o["agent"]["trace"])), (15, 2))
             for path in ("/v1/review/1", "/v1/current"):
                 req = urllib.request.Request(base + path, method="POST", data=b'{"lat": 1, "lon": 2}',
                                              headers={"Authorization": "Bearer synthetic-agent"})

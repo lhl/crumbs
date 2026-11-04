@@ -57,6 +57,29 @@ def _media_row(r, tier):
     return d
 
 
+AGENT_MAX_RESULTS = 10
+
+
+def _location_age() -> dict:
+    """When the owner's device last posted its location, so a caller can flag stale 'around here' answers."""
+    if not CURRENT["at"]:
+        return {"as_of": None, "age_s": None}
+    age = (datetime.now() - datetime.fromisoformat(CURRENT["at"])).total_seconds()
+    return {"as_of": CURRENT["at"], "age_s": round(age)}
+
+
+def _for_agent(out: dict) -> dict:
+    """Keep an external agent's context small: no tool trace, at most AGENT_MAX_RESULTS cards.
+    The owner token still gets the full response."""
+    out = dict(out)
+    out["results"] = out.get("results", [])[:AGENT_MAX_RESULTS]
+    if isinstance(out.get("agent"), dict):
+        a = out["agent"]
+        out["agent"] = {k: a.get(k) for k in ("used", "latency_s", "error")} | {
+            "lookups": sum(1 for t in a.get("trace", []) if t.get("step") == "tool")}
+    return out
+
+
 def make_handler(conn):
     token = os.environ.get("CRUMBS_API_TOKEN", "").strip()
     agent_token = os.environ.get("CRUMBS_AGENT_TOKEN", "").strip()
@@ -130,13 +153,20 @@ def make_handler(conn):
                 if path == "/v1/ask":
                     from .ask import ask as ask_engine
 
-                    lat = float(q["lat"][0]) if "lat" in q else (CURRENT["lat"] if q.get("near", [""])[0] == "current" else None)
-                    lon = float(q["lon"][0]) if "lon" in q else (CURRENT["lon"] if q.get("near", [""])[0] == "current" else None)
+                    near_current = q.get("near", [""])[0] == "current" and "lat" not in q
+                    lat = float(q["lat"][0]) if "lat" in q else (CURRENT["lat"] if near_current else None)
+                    lon = float(q["lon"][0]) if "lon" in q else (CURRENT["lon"] if near_current else None)
                     if q.get("agent", ["0"])[0] in ("1", "true"):
                         from .agent import run_agent
 
-                        return self._json(run_agent(conn, q.get("q", [""])[0], lat=lat, lon=lon))
-                    return self._json(ask_engine(conn, q.get("q", [""])[0], lat=lat, lon=lon))
+                        out = run_agent(conn, q.get("q", [""])[0], lat=lat, lon=lon)
+                    else:
+                        out = ask_engine(conn, q.get("q", [""])[0], lat=lat, lon=lon)
+                    if near_current:
+                        out["current_location"] = _location_age()
+                    if self._role() == "agent":
+                        out = _for_agent(out)
+                    return self._json(out)
                 return self._json({"error": "not found"}, 404)
             except Exception as e:
                 return self._json({"error": f"{type(e).__name__}: {e}"}, 500)
@@ -244,7 +274,8 @@ def make_handler(conn):
                 return {"count": len(places)}
             for p in places:
                 p["lat"], p["lon"] = _round(p["lat"], tier), _round(p["lon"], tier)
-            return {"places": places, "current_location_at": CURRENT["at"] if near == "current" else None}
+            return {"places": places, "current_location_at": CURRENT["at"] if near == "current" else None,
+                    "current_location": _location_age() if near == "current" else None}
 
         def _visits(self, q, tier):
             frm, to = q.get("from", [None])[0], q.get("to", [None])[0]

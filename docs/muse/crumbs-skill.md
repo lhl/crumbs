@@ -2,15 +2,17 @@
 
 Give this document to the Muse agent as a persisted skill. It describes how to
 ask Crumbs about the owner's own meals, places, and trips. Crumbs runs on the
-owner's hardware; you reach it over the owner's private tunnel. The URL and
-token are configured in the agent's vault or secret store, never in chat,
-files, or this document.
+owner's hardware; you reach it over the owner's private tunnel. The token is
+held by the agent platform's credential mechanism (for Muse: entered through
+the secure API-access form and substituted only on requests to the registered
+host), never in chat, commands, files, or this document.
 
 ## Connection
 
-- Base URL: the `CRUMBS_URL` secret (a private tunnel address, port 8770 by default).
-- Auth: send `Authorization: Bearer <CRUMBS_AGENT_TOKEN secret>` on every request except
-  `/v1/health`. Never print, log, or repeat the token.
+- Base URL: the Crumbs host's tailnet name (preferred over its IP, which can change) on
+  port 8770. This is configuration, not a secret; use one exact address form everywhere.
+- Auth: every request except `/v1/health` carries `Authorization: Bearer <agent token>`,
+  added by the platform's credential helper. Never print, log, or repeat the token.
 - This token is read-only and capped at privacy tier 1: coordinates are rounded to
   about 1 km and file names are stripped, whatever you request.
 
@@ -47,9 +49,14 @@ The response is JSON:
      "dishes": [{"name": "eel rice bowl", "basis": "seen | read_on_menu | receipt"}],
      "media": [123, 124]}
   ],
-  "agent": {"used": true, "latency_s": 70.2, "trace": [...], "grounding": {...}}
+  "agent": {"used": true, "latency_s": 70.2, "lookups": 3, "error": null},
+  "current_location": {"as_of": "2026-11-05T04:20:00", "age_s": 95}
 }
 ```
+
+With the agent token, `results` is capped at 10 and the tool trace is left out.
+`current_location` appears only with `near=current`: if `as_of` is null or `age_s` is large
+(say over 30 minutes), tell the owner the "around here" answer uses an old or missing location.
 
 ## How to relay answers
 

@@ -1,18 +1,16 @@
-# 🥖 Crumbs
+# Crumbs
 
-**Your photos already remember where you ate. Crumbs helps you find it, without your life leaving your house.**
+Crumbs turns the photos and location history you already have into a searchable database of where you went and what you ate. Every model runs on your own hardware.
 
-Most of us have tens of thousands of photos on our phones, a lot of them of food. But even for the most memorable meals, the photo app makes it nearly impossible to find the specifics: the name of the place, what you ordered, when you were there. You want them when a friend asks for a recommendation, or when you're about to go back.
+I have tens of thousands of photos on my iPhone, including way too many food photos. Even for my most memorable meals, the default photo app makes it nearly impossible to find the specifics, whether it's for giving a friend a recommendation or remembering what I ordered the last time I was there. Like most people, I'm not keen on uploading all my photos and location history to AI services, so I built this with local AI instead.
 
-An AI could answer that, but only if you upload every photo and your whole location history to someone else's service. Crumbs does it with local AI instead. It turns the photos and location history you already have into a searchable record of where you went and what you ate, and every model runs on hardware you own.
-
-Built for the [Meta Global AI Developer Hackathon](HACKATHON.md) (Oct 27 – Nov 4, 2026). Food comes first; hotel stays and whole-trip stories are next.
+Crumbs was built for the [Meta Global AI Developer Hackathon](HACKATHON.md) (Oct 27 – Nov 4, 2026). It covers food first; hotel stays and trip stories are next.
 
 ## What you can ask
 
 > "What was the name of the eel place I had lunch at, the day I went to that garden in Kyoto?"
 
-Crumbs' agent (Muse Glimmer, running locally) works through it step by step:
+The Ask agent (Muse Glimmer, running locally) answers in steps:
 1. It finds the garden in the text of your photos.
 2. It reads that day as a timeline of meals and stops.
 3. It picks the lunch with the eel.
@@ -20,7 +18,7 @@ Crumbs' agent (Muse Glimmer, running locally) works through it step by step:
 
 The answer comes back with the photos it used as evidence.
 
-Simpler questions work too: "where did I have soup dumplings in Taipei?", "what did I eat in Kyoto?", "have I been to Paris?". The last one gets an honest "no record" rather than a guess.
+It also answers single-lookup questions such as "where did I have soup dumplings in Taipei?" and "what did I eat in Kyoto?". For "have I been to Paris?", when there's no record, it says so instead of guessing.
 
 ## How it works
 
@@ -33,11 +31,15 @@ DINOv3: embeddings, near-duplicates ──────────────�
 OpenStreetMap places (cached) ─► place candidates ────┘
 ```
 
-- **Evidence, not guesses.** Every record keeps its provenance: *observed* (EXIF, GPS), *inferred* (a model read it), *lookup* (map data) or *confirmed* (you said so). Crumbs never names a restaurant from what the food looks like. A name comes from text in your photos, from GPS plus the map, or from you, and the answer says which.
-- **Unknown stays unknown.** When the evidence is thin, Crumbs asks you ("Was this X?"). Your answer is stored next to the model's guess, never over it.
-- **Grounded agent.** The Ask agent plans lookups over your index with tool calls. Answers cite the visits and photos the tools returned, and any citation no tool returned is removed.
+- **Provenance:** every record is marked *observed* (EXIF, GPS), *inferred* (a model read it), *lookup* (map data), or *confirmed* (you said so). A restaurant name comes from text in your photos, from GPS plus the map, or from you, and the answer says which. Crumbs never names a restaurant from what the food looks like.
+- **Review questions:** when the evidence is thin, Crumbs asks you ("Was this X?"). Your answer is stored next to the model's guess, not over it.
+- **Citations:** the Ask agent plans lookups with tool calls and cites the visits and photos the tools returned. Any citation no tool returned is removed.
 
-## Models: open Meta models on my own hardware
+### Location data
+
+Crumbs reads GPS from each photo's EXIF data. It uses OpenStreetMap for the place registry and for local vector basemaps (PMTiles), and it adds location history from GeoJSON exports (I have years of it from Wanderings). The labeling UI reverse-geocodes offline with GeoNames data. Each source is recorded as its own import, so check-ins, trip itineraries, or other sources can be added the same way.
+
+## Models
 
 | Model | Role | Parameters | Size (GB) | Precision | License |
 |---|---|---|---|---|---|
@@ -46,20 +48,20 @@ OpenStreetMap places (cached) ─► place candidates ────┘
 | SAM 3.1 *(tested)* | Masks for signs, menus, receipts, dishes | 848M | 1.68 | BF16 | SAM License |
 | PE-Core L14 / G14 *(tested)* | Zero-shot photo labels | 0.32B / 1.88B vision | 2.6 / 9.1 | FP32 | Apache 2.0 |
 
-Measured on my own photos and hardware: an AMD Strix Halo box with 128 GB of unified memory, plus a 4× RTX PRO 6000 box for burst runs.
+Everything runs on an AMD Strix Halo box (128 GB unified memory); a 4× RTX PRO 6000 box handled burst runs. Results, measured on my photos:
 
-- **Glimmer accuracy:** food F1 of **0.976** on 61 hand-verified food photos (Q4_K_M on Strix Halo).
+- **Glimmer accuracy:** food F1 of 0.976 on 61 hand-verified food photos (Q4_K_M on Strix Halo).
 - **Throughput:** classifying all 9,669 photos took about 12 minutes on the PRO 6000 box. On Strix Halo it runs at 19.4 s per photo.
 - **DINOv3:** about 50 ms per photo.
-- **Glimmer as a decision model (side quest):** restricted reads with [AnyJev](https://github.com/nokia-applied-research/AnyJev), no training, scored 76.6% on JevBench and a Decision Index 0.3 skill score of 32.60. These are not leaderboard submissions.
+- **Glimmer as a decision model (side quest):** using [AnyJev](https://github.com/nokia-applied-research/AnyJev) restricted reads with no training, Glimmer scored 76.6% on JevBench and 32.60 on the Decision Index 0.3 skill index. These are not leaderboard submissions.
 
 Full numbers, engines and caveats are in [MODELS.md](MODELS.md).
 
-## Privacy: where the line is
+## Privacy
 
 - **Stays on your box:** photos, EXIF/GPS, location history, the database, and all model inference. The map uses local PMTiles, and the map view makes zero external requests.
-- **You choose what crosses:** the optional [Muse bridge](docs/muse/SETUP.md) lets a Muse agent ask Crumbs questions over your private tailnet, using a read-only token capped at a redacted privacy tier. Only the answers to those questions leave the box; the archive never does.
-- **One network lookup today:** `places-fetch` asks OpenStreetMap's Overpass service for restaurants around your food visits and caches the results locally. That reveals the areas queried, but no photos or history. An offline map-data importer is planned.
+- **What you choose to share:** the optional [Muse bridge](docs/muse/SETUP.md) lets a Muse agent (mine is called Buddy) ask Crumbs questions over your private tailnet, using a read-only token capped at a redacted privacy tier. The full archive stays on the box; only the answers to those questions go out.
+- **Network lookup:** `places-fetch` asks OpenStreetMap's Overpass service for restaurants around your food visits and caches the results locally. That reveals the areas queried, but no photos or history. An offline map-data importer is planned.
 - **During development:** one comparison run sent sample photos to a hosted model API, by explicit decision, and bulk passes ran on our own PRO 6000 box.
 
 ## Run it
@@ -101,6 +103,10 @@ Everything here was built during the hackathon's building period (Oct 27 – Nov
 
 Most of the implementation was done with Meta's **Muse Wonder Full (max)** until its credits ran out. Additional implementation models were **Claude Opus 5.5**, plus **GPT-6.1 Sol** and **DeepSeek V4.1 Flash 1017** running in our [Jouzu](https://jouzu.dev) harness.
 
-## Not built yet
+## Not built
 
-Voice questions, background organising as new photos arrive, a taste profile, and hotel and trip stories. These are next, and nothing in the demo shows them as working.
+These are next, and the demo does not show them as working:
+- voice questions;
+- background organising as new photos arrive;
+- a taste profile;
+- hotel and trip stories.

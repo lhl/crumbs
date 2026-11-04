@@ -7,6 +7,15 @@ held by the agent platform's credential mechanism (for Muse: entered through
 the secure API-access form and substituted only on requests to the registered
 host), never in chat, commands, files, or this document.
 
+## First calls
+
+1. `GET /v1/health` (no auth). Expect `{"status": "ok"}`.
+2. `GET /v1/openapi.json` (no auth): the machine-readable spec of every endpoint below.
+3. `GET /v1/places?q=cafe` (agent token): a harmless check that authentication works.
+4. Then answer the owner's questions with `GET /v1/ask?q=...&agent=1`.
+
+This document is also served at `GET /v1/skill`.
+
 ## Connection
 
 - Base URL: the Crumbs host's tailnet name (preferred over its IP, which can change) on

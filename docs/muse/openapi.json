@@ -1,0 +1,55 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Crumbs local API",
+    "version": "1",
+    "description": "The owner's private food and travel memory, served from their own machine over their tailnet. Read docs at GET /v1/skill before calling. Check GET /v1/health first; if it fails, tell the owner Crumbs is offline and stop. One request at a time."
+  },
+  "servers": [{"url": "http://{host}:8770", "variables": {"host": {"default": "crumbs-host", "description": "The Crumbs machine's tailnet (MagicDNS) name"}}}],
+  "security": [{"bearer": []}],
+  "components": {
+    "securitySchemes": {"bearer": {"type": "http", "scheme": "bearer", "description": "The agent token: read-only, capped at privacy tier 1. Supplied by the platform's credential helper; never shown in chat."}},
+    "schemas": {
+      "Card": {
+        "type": "object",
+        "properties": {
+          "visit_id": {"type": "integer"},
+          "date": {"type": ["string", "null"], "description": "YYYY-MM-DD"},
+          "moment": {"type": "string", "description": "HH:MM–HH:MM, for a moment within a visit"},
+          "place": {"type": "object", "properties": {"name": {"type": ["string", "null"]}, "source": {"type": ["string", "null"]}, "status": {"type": ["string", "null"]}}},
+          "text_names": {"type": "array", "items": {"type": "string"}, "description": "Words read in the photos (unverified)"},
+          "dishes": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "basis": {"type": "string", "description": "seen | read_on_menu | receipt"}}}},
+          "media": {"type": "array", "items": {"type": "integer"}, "description": "Photo ids; GET /v1/media/{id}/preview"}
+        }
+      }
+    }
+  },
+  "paths": {
+    "/v1/health": {"get": {"summary": "Liveness and record counts", "security": [], "responses": {"200": {"description": "{\"status\": \"ok\", \"counts\": {...}}"}}}},
+    "/v1/skill": {"get": {"summary": "How to use Crumbs and relay its answers (markdown)", "security": [], "responses": {"200": {"description": "text/markdown"}}}},
+    "/v1/ask": {
+      "get": {
+        "summary": "Ask a question about the owner's history",
+        "description": "With agent=1 the owner's local Muse Glimmer agent plans lookups and answers in 30-90 s; use a timeout of at least 120 s. Without it, a fast parser answers simple questions in under a second.",
+        "parameters": [
+          {"name": "q", "in": "query", "required": true, "schema": {"type": "string"}},
+          {"name": "agent", "in": "query", "schema": {"type": "string", "enum": ["1"]}},
+          {"name": "near", "in": "query", "schema": {"type": "string", "enum": ["current"]}, "description": "Use the owner's last posted location; the response carries current_location {as_of, age_s}"}
+        ],
+        "responses": {"200": {"description": "Answer with evidence", "content": {"application/json": {"schema": {"type": "object", "properties": {
+          "status": {"type": "string", "enum": ["answered", "unknown"]},
+          "answer": {"type": "string", "description": "Cites evidence as [p123]/[v45]; strip these when relaying"},
+          "results": {"type": "array", "maxItems": 10, "items": {"$ref": "#/components/schemas/Card"}},
+          "agent": {"type": "object", "properties": {"used": {"type": "boolean"}, "latency_s": {"type": "number"}, "lookups": {"type": "integer"}, "error": {"type": ["string", "null"]}}},
+          "current_location": {"type": "object", "properties": {"as_of": {"type": ["string", "null"]}, "age_s": {"type": ["integer", "null"]}}}
+        }}}}}}
+      }
+    },
+    "/v1/media/{id}/preview": {"get": {"summary": "Stripped JPEG preview of one photo (no EXIF/GPS); fetch only when the owner asks to see it", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}], "responses": {"200": {"description": "image/jpeg"}}}},
+    "/v1/search": {"get": {"summary": "Photos whose read text matches", "parameters": [{"name": "q", "in": "query", "schema": {"type": "string"}}, {"name": "category", "in": "query", "schema": {"type": "string", "enum": ["food", "sightseeing", "trip", "personal", "unknown"]}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 100}}], "responses": {"200": {"description": "{\"results\": [...]}"}}}},
+    "/v1/visits": {"get": {"summary": "Visits in a date range", "parameters": [{"name": "from", "in": "query", "schema": {"type": "string"}}, {"name": "to", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "{\"visits\": [...]}"}}}},
+    "/v1/visit/{id}": {"get": {"summary": "One visit with photos and candidate places", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}], "responses": {"200": {"description": "{\"visit\": {...}, \"photos\": [...]}"}}}},
+    "/v1/places": {"get": {"summary": "Registry places by name", "parameters": [{"name": "q", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "{\"places\": [...]}"}}}},
+    "/v1/nearby": {"get": {"summary": "Registry places near the owner's current location", "parameters": [{"name": "near", "in": "query", "schema": {"type": "string", "enum": ["current"]}}, {"name": "radius_m", "in": "query", "schema": {"type": "integer"}}], "responses": {"200": {"description": "{\"places\": [...], \"current_location\": {...}}"}}}}
+  }
+}

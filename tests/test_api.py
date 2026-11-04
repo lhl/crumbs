@@ -174,6 +174,13 @@ class ApiTests(unittest.TestCase):
             thread.join(timeout=5)
             conn.close()
 
+    def test_agent_docs_are_served_without_auth(self):
+        base = self.start_server()
+        with urllib.request.urlopen(base + "/v1/openapi.json", timeout=3) as r:
+            self.assertIn("/v1/ask", json.load(r)["paths"])
+        with urllib.request.urlopen(base + "/v1/skill", timeout=3) as r:
+            self.assertIn("Always check health first", r.read().decode())
+
     def test_tokenless_writes_refuse_foreign_origins(self):
         import sqlite3
         from crumbs import db

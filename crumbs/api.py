@@ -27,6 +27,7 @@ import json
 import os
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import config, db
@@ -58,6 +59,9 @@ def _media_row(r, tier):
 
 
 AGENT_MAX_RESULTS = 10
+DOCS_DIR = Path(__file__).resolve().parent.parent / "docs" / "muse"
+AGENT_DOCS = {"/v1/skill": ("crumbs-skill.md", "text/markdown; charset=utf-8"),
+              "/v1/openapi.json": ("openapi.json", "application/json")}
 
 
 def _location_age() -> dict:
@@ -126,6 +130,11 @@ def make_handler(conn):
                 counts = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
                           for t in ("media_items", "classifications", "extractions", "visits", "places", "stays")}
                 return self._json({"status": "ok", "counts": counts})
+            if path in AGENT_DOCS:  # how to use this API; no data, so no auth (like health)
+                doc = DOCS_DIR / AGENT_DOCS[path][0]
+                if not doc.exists():
+                    return self._json({"error": "docs not installed"}, 404)
+                return self._bytes(doc.read_bytes(), AGENT_DOCS[path][1])
             if not self._authed():
                 return self._json({"error": "unauthorized"}, 401)
             tier = _tier_of(q)

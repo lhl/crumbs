@@ -148,13 +148,27 @@ GEO = f"""<html><head><style>{CSS}{GEO_CSS}</style></head><body>
 </body></html>"""
 
 
+END = f"""<html><head><style>{CSS}
+body {{ background: #141414; color: #fbf8f3; display: flex; flex-direction: column; justify-content: center; padding: 0 160px; }}
+.big {{ font-size: 150px; font-weight: 800; letter-spacing: -3px; }}
+.tag {{ font-size: 46px; margin-top: 10px; color: #fbf8f3; }}
+.next {{ font-size: 32px; margin-top: 44px; color: #e63946; font-weight: 700; }}
+.small {{ font-size: 24px; margin-top: 70px; color: #8a8a8a; }}
+</style></head><body>
+<div class="big">Crumbs</div>
+<div class="tag">Your personal memories, safely searchable.</div>
+<div class="next">Food first · hotels and trips next</div>
+<div class="small">Local AI with open Meta models: Muse Glimmer · DINOv3 · SAM 3.1 · Perception Encoder</div>
+</body></html>"""
+
+
 def main(out_dir):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         b = p.chromium.launch(executable_path="/usr/bin/chromium")
         page = b.new_page(viewport={"width": 1920, "height": 1080})
-        for name, html in (("models", MODELS), ("results", RESULTS), ("geo", GEO)):
+        for name, html in (("models", MODELS), ("results", RESULTS), ("geo", GEO), ("end", END)):
             page.set_content(html)
             page.wait_for_timeout(300)
             page.screenshot(path=str(out / f"{name}.png"))

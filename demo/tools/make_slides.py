@@ -154,11 +154,13 @@ body {{ background: #141414; color: #fbf8f3; display: flex; flex-direction: colu
 .tag {{ font-size: 46px; margin-top: 10px; color: #fbf8f3; }}
 .next {{ font-size: 32px; margin-top: 44px; color: #e63946; font-weight: 700; }}
 .small {{ font-size: 24px; margin-top: 70px; color: #8a8a8a; }}
+.url {{ font-size: 34px; margin-top: 22px; color: #fbf8f3; font-family: 'JetBrains Mono', 'Noto Sans Mono', monospace; }}
 </style></head><body>
 <div class="big">Crumbs</div>
 <div class="tag">Your personal memories, safely searchable.</div>
 <div class="next">Food first · hotels and trips next</div>
 <div class="small">Local AI with open Meta models: Muse Glimmer · DINOv3 · SAM 3.1 · Perception Encoder</div>
+<div class="url">github.com/lhl/crumbs</div>
 </body></html>"""
 
 

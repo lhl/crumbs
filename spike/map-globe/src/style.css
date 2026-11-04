@@ -16,6 +16,11 @@ button.on { background: #222; color: #fff; border-color: #222; }
 #ask-box button { padding: 6px 12px; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
 #ask-answer { margin-top: 8px; line-height: 1.45; max-height: 62vh; overflow-y: auto; }
 .ask-summary { font-weight: 600; margin-bottom: 6px; }
+.ask-summary.agent { font-weight: 400; font-size: 14px; }
+.agent-toggle { display: block; margin-top: 6px; font-size: 12px; color: #556; }
+.agent-trace { font-size: 11px; color: #667; margin-bottom: 8px; }
+.agent-trace summary { cursor: pointer; }
+.agent-trace div { font-family: ui-monospace, monospace; padding-left: 10px; }
 .ask-summary.unknown { font-weight: 400; color: #555; background: #f5f5f8; padding: 8px; border-radius: 6px; }
 .ask-card { border: 1px solid #e6e6ee; border-radius: 8px; padding: 8px; margin-bottom: 8px; }
 .ask-head { margin-bottom: 6px; }

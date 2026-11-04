@@ -394,13 +394,21 @@ async function runAsk() {
   if (!q) return;
   const box = $('ask-answer');
   box.className = '';
-  box.textContent = 'Asking the local index…';
+  const agent = $('ask-agent').checked;
+  box.textContent = agent ? 'Muse Glimmer is planning lookups over your local index…' : 'Asking the local index…';
   try {
-    const r = await apiFetch(`/v1/ask?q=${encodeURIComponent(q)}`);
+    const r = await apiFetch(`/v1/ask?q=${encodeURIComponent(q)}${agent ? '&agent=1' : ''}`);
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || r.status);
-    const header = (d.answer || '').split('\n')[0];
-    box.innerHTML = `<div class="ask-summary ${d.status === 'unknown' ? 'unknown' : ''}">${esc(d.results?.length ? header : d.answer)}</div><div class="ask-cards"></div>`;
+    // The agent writes a short cited answer; the parser's first line is a header.
+    const a = d.agent;
+    const text = a?.used ? d.answer.replace(/\s*\[v\d+\]/g, '') : (d.results?.length ? (d.answer || '').split('\n')[0] : d.answer);
+    const steps = (a?.trace || []).filter((s) => s.step === 'tool')
+      .map((s) => `${esc(s.tool)}(${esc(Object.values(s.args || {}).join(', '))}) → ${s.error ? esc(s.error) : `${s.found ?? 0} found`}`);
+    const traceHtml = a ? `<details class="agent-trace"><summary>${a.used
+      ? `Muse Glimmer · ${steps.length} lookup${steps.length === 1 ? '' : 's'} · ${a.latency_s}s`
+      : esc(a.error || 'agent not used')}</summary>${steps.map((x) => `<div>${x}</div>`).join('')}</details>` : '';
+    box.innerHTML = `<div class="ask-summary ${d.status === 'unknown' ? 'unknown' : ''} ${a?.used ? 'agent' : ''}">${esc(text)}</div>${traceHtml}<div class="ask-cards"></div>`;
     renderCards(box.querySelector('.ask-cards'), d.results || []);
   } catch (e) {
     box.className = 'muted';

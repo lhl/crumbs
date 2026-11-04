@@ -58,6 +58,7 @@ def main(argv=None) -> int:
     p_ask.add_argument("question")
     p_ask.add_argument("--lat", type=float, default=None)
     p_ask.add_argument("--lon", type=float, default=None)
+    p_ask.add_argument("--agent", action="store_true", help="let Muse Glimmer (GLIMMER_URL) plan tool calls")
     sub.add_parser("demo", help="build the local demo manifest + sufficiency verdict (DEM-01)")
     sub.add_parser("correlate", help="cross-correlate photo visits with location stays")
 
@@ -164,10 +165,28 @@ def main(argv=None) -> int:
 
         print("reconcile:", reconcile_all(conn))
     elif args.cmd == "ask":
-        from .ask import ask
+        if args.agent:
+            from .agent import run_agent
 
-        result = ask(conn, args.question, lat=args.lat, lon=args.lon)
+            result = run_agent(conn, args.question, lat=args.lat, lon=args.lon)
+        else:
+            from .ask import ask
+
+            result = ask(conn, args.question, lat=args.lat, lon=args.lon)
         print(result["answer"])
+        if args.agent:
+            import json as _jsonlib
+
+            from .ask import _card_line
+
+            for card in result.get("results", []):
+                print(_card_line(card))
+            a = result.get("agent", {})
+            for step in a.get("trace", []):
+                if step["step"] == "tool":
+                    print(f"  tool {step['tool']}({_jsonlib.dumps(step['args'], ensure_ascii=False)}) -> "
+                          f"{step.get('error') or step.get('found')}")
+            print("[agent:", {k: a.get(k) for k in ("used", "latency_s", "grounding", "error") if a.get(k) is not None}, "]")
         print("[evidence:", result["evidence"], "| status:", result["status"] + "]")
     elif args.cmd == "demo":
         from .demo import build_demo_manifest

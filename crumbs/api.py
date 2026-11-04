@@ -117,6 +117,10 @@ def make_handler(conn):
 
                     lat = float(q["lat"][0]) if "lat" in q else (CURRENT["lat"] if q.get("near", [""])[0] == "current" else None)
                     lon = float(q["lon"][0]) if "lon" in q else (CURRENT["lon"] if q.get("near", [""])[0] == "current" else None)
+                    if q.get("agent", ["0"])[0] in ("1", "true"):
+                        from .agent import run_agent
+
+                        return self._json(run_agent(conn, q.get("q", [""])[0], lat=lat, lon=lon))
                     return self._json(ask_engine(conn, q.get("q", [""])[0], lat=lat, lon=lon))
                 return self._json({"error": "not found"}, 404)
             except Exception as e:

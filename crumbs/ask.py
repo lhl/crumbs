@@ -50,7 +50,7 @@ STOP = set("""
 a an the and or of in at on to for from with near by about this that these those it its
 i me my we our us you your what whats where when which who how did do does was were is are
 been have has had ate eat eating order ordered get got try tried place places restaurant
-restaurants food meal meals dish dishes there here last time again good best little
+restaurants food meal meals dish dishes there here last time again good best little ever never any
 """.split()) | set(MONTHS) | set(AREAS)
 FOOD_INTENT = (" eat", " ate", " food", " restaurant", " dish", " meal", " order", " had ",
                " have ", " lunch", " dinner", " breakfast", " cafe", " coffee", " place")
@@ -303,6 +303,35 @@ def _dish_search(conn, terms, area, window, ex):
     return [(vid, media) for _, _, vid, media in ranked]
 
 
+def place_visit_cards(conn, place, ex):
+    """(visits whose best place is `place`, close-candidate food visits)."""
+    vids = [r[0] for r in conn.execute(
+        """SELECT DISTINCT v.id FROM visits v
+           WHERE v.id IN (SELECT visit_id FROM visit_place_candidates WHERE place_id = ?)
+              OR v.id IN (SELECT visit_id FROM visit_resolutions WHERE top_place_id = ?)
+           ORDER BY v.started_at""", (place["id"], place["id"]))]
+    close = {r[0] for r in conn.execute(
+        "SELECT visit_id FROM visit_place_candidates WHERE place_id = ? AND (distance_m <= 120 OR evidence != 'gps')",
+        (place["id"],))}
+    cards = [visit_card(conn, vid, ex) for vid in vids]
+    primary = [c for c in cards if c["place"]["place_id"] == place["id"]]
+    near = [c for c in cards if c["place"]["place_id"] != place["id"] and c["visit_id"] in close and c["food_photos"]]
+    return primary, near
+
+
+def food_visit_cards(conn, scope, window, ex):
+    """Food visits inside an area/window, best-evidenced first."""
+    picked = []
+    for v in conn.execute("SELECT * FROM visits WHERE center_lat IS NOT NULL ORDER BY started_at"):
+        if _in_scope(v, scope, window):
+            c = visit_card(conn, v["id"], ex)
+            if c["food_photos"] or c["dishes"]:
+                picked.append(c)
+    picked.sort(key=lambda c: (-(c["place"]["status"] == "confirmed") - bool(c["place"]["name"]) - bool(c["dishes"]),
+                               c["date"] or ""))
+    return picked
+
+
 def ask(conn, question: str, lat=None, lon=None) -> dict:
     q = " " + question.lower().strip() + " "
     ex = _latest_extractions(conn)
@@ -325,26 +354,14 @@ def ask(conn, question: str, lat=None, lon=None) -> dict:
 
     # Family A: what did I have at <place>
     if place and any(w in q for w in (" have ", " had ", " order", " eat ", " ate ")):
-        vids = [r[0] for r in conn.execute(
-            """SELECT DISTINCT v.id FROM visits v
-               WHERE v.id IN (SELECT visit_id FROM visit_place_candidates WHERE place_id = ?)
-                  OR v.id IN (SELECT visit_id FROM visit_resolutions WHERE top_place_id = ?)
-               ORDER BY v.started_at""", (place["id"], place["id"]))]
-        close = {r[0] for r in conn.execute(
-            "SELECT visit_id FROM visit_place_candidates WHERE place_id = ? AND (distance_m <= 120 OR evidence != 'gps')",
-            (place["id"],))}
-        # A visit is about this place only if the place is its best answer, or
-        # a close/text-backed candidate on a visit with food evidence.
-        cards = [c for c in (visit_card(conn, vid, ex) for vid in vids)
-                 if c["place"]["place_id"] == place["id"] or (c["visit_id"] in close and c["food_photos"])]
-        primary = sorted((c for c in cards if c["place"]["place_id"] == place["id"]), key=lambda c: c["date"] or "")
+        primary, close = place_visit_cards(conn, place, ex)
         if primary:
             return _answer(f"Your visits to {place['name']} (✓ = you confirmed; ? = best candidate):", primary[:8],
                            {"places": [place["id"]]})
-        if not cards:
+        if not close:
             return _unknown(f"No visits are linked to {place['name']} yet.")
         return _answer(f"No visit resolves to {place['name']}, but it is a close candidate for these food visits:",
-                       sorted(cards, key=lambda c: c["date"] or "")[:8], {"places": [place["id"]]})
+                       close[:8], {"places": [place["id"]]})
 
     # Family E: dish / menu-text search
     terms = _terms(q, drop=[place["name"]] if place else [])
@@ -363,16 +380,9 @@ def ask(conn, question: str, lat=None, lon=None) -> dict:
     # Family B: food visits in an area / window
     if (area or place) and (window or any(w in q for w in FOOD_INTENT)):
         scope = area or {"name": place["name"], "lat": place["lat"], "lon": place["lon"], "radius_m": 2000}
-        picked = []
-        for v in conn.execute("SELECT * FROM visits WHERE center_lat IS NOT NULL ORDER BY started_at"):
-            if _in_scope(v, scope, window):
-                c = visit_card(conn, v["id"], ex)
-                if c["food_photos"] or c["dishes"]:
-                    picked.append(c)
+        picked = food_visit_cards(conn, scope, window, ex)
         if not picked:
             return _unknown(f"No food visits found{_scope_text(scope, window)}.")
-        picked.sort(key=lambda c: (-(c["place"]["status"] == "confirmed") - bool(c["place"]["name"]) - bool(c["dishes"]),
-                                   c["date"] or ""))
         return _answer(f"Food visits{_scope_text(scope, window)} ({len(picked)} found; best-evidenced first):", picked[:8])
 
     # Family U: "have I been to X?" with nothing to anchor it

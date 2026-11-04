@@ -8,27 +8,41 @@ Design:
   dish names, photo-text names).
 - Tools are the deterministic Ask functions (crumbs.ask), so the agent and
   the parser answer from the same records.
-- Grounding check: the answer must cite visits as [v<id>]. Citations of
-  visits no tool returned are removed and reported; the cards shown are
-  the cited visits (or, if none were cited, everything the tools found).
-  No tool results means the status is "unknown", whatever the text says.
+- Multi-step recall follows the skill in crumbs/skills/recall.md (loaded
+  into the system prompt): classify the question, then for anchored
+  questions find the anchor photo, read that day's moments, and take the
+  name from photo text in the matching meal moment.
+- Grounding check: the answer cites visits as [v<id>] and moments as
+  [p<photo id>]. Citations of anything no tool returned are removed and
+  reported; the cards shown are the cited moments and visits (or, if none
+  were cited, everything the tools found). No tool results means the
+  status is "unknown", whatever the text says.
+- look_at_photos is the only path where Glimmer sees pixels, and only for
+  photos a tool already returned; its output is labelled a model
+  observation.
 - If Glimmer is unreachable, the deterministic parser answers and the
   response says so; nothing is faked.
 """
 
+import base64
 import json
 import re
 import time
+from pathlib import Path
 import urllib.error
 import urllib.request
 
 from . import config
 from .ask import (AREAS, _dish_search, _find_area, _latest_extractions, _terms, ask as parse_ask,
                   food_visit_cards, place_visit_cards, visit_card)
+from .moments import day_visits, find_photos, moment_card, moment_line, visit_moments
 from .places import haversine_m, search_name
 
-MAX_ROUNDS = 3
+MAX_ROUNDS = 5
 MAX_CARDS = 6
+MAX_MOMENTS = 18
+MAX_LOOKS = 2
+SKILL = (Path(__file__).parent / "skills" / "recall.md").read_text(encoding="utf-8")
 
 SYSTEM = """You are Crumbs, a private assistant over the user's own food and travel history, \
 reconstructed from their photos and location history. Use the tools to look things up; never answer \
@@ -42,7 +56,10 @@ Rules:
 - Never infer a restaurant from what the food looks like.
 - If the tools return nothing relevant, say plainly that the history has no record of it. Unknown is a fine answer.
 - Search dishes with short English food words (e.g. "dumpling", "grilled fish"); try one alternative wording if the first search is empty.
-- One tool call is usually enough. Answer in 1-3 short sentences, in the user's language. No lists, no markdown."""
+- Simple questions need one tool call; anchored questions need a few. Answer in 1-3 short sentences, \
+in the user's language. No lists, no markdown.
+
+""" + SKILL
 
 
 def _tool_specs(has_location: bool):
@@ -60,6 +77,17 @@ def _tool_specs(has_location: bool):
          {"name": {"type": "string"}}, ["name"]),
         ("visit_details", "All recorded dishes and names for one visit.",
          {"visit_id": {"type": "integer"}}, ["visit_id"]),
+        ("find_photos", "Find photos whose read text (signs, tickets, menus, place names) matches a name. "
+         "Use for the anchor of an anchored question (a landmark, hotel, event).",
+         {"text": {"type": "string", "description": "one distinctive name, e.g. 'Kinkakuji'"}, "city": city,
+          "month": month}, ["text"]),
+        ("day_timeline", "The moments of one day in time order (each usually one meal or stop) with their "
+         "dishes and photo text.",
+         {"date": {"type": "string", "description": "YYYY-MM-DD"}}, ["date"]),
+        ("look_at_photos", "Have the vision model look at photos already returned by a tool and answer a short "
+         "question about what is visible. Only for visual details the text does not cover.",
+         {"photo_ids": {"type": "array", "items": {"type": "integer"}, "description": "1-2 photo_id values"},
+          "question": {"type": "string"}}, ["photo_ids", "question"]),
     ]
     if has_location:
         specs.append(("visits_near_me", "Past visits within 1 km of the user's current location.", {}, []))
@@ -89,10 +117,12 @@ def _compact(card):
 
 
 class Tools:
-    def __init__(self, conn, lat=None, lon=None):
+    def __init__(self, conn, lat=None, lon=None, vision=None):
         self.conn, self.lat, self.lon = conn, lat, lon
+        self.vision = vision or _vision
         self.ex = _latest_extractions(conn)
         self.cards = {}  # visit_id -> full card, everything any tool returned
+        self.photos = set()  # photo ids any tool returned (citable as [p<id>])
 
     def _keep(self, cards):
         for c in cards[:MAX_CARDS]:
@@ -166,6 +196,57 @@ class Tools:
         full["dishes"] = [f"{d['name']} ({d['basis']})" for d in card["dishes"]]
         return full
 
+    def find_photos(self, text="", city=None, month=None):
+        text = (text or "").strip()
+        if len(text) < 2:
+            return {"error": "text required"}
+        area, err = self._area(city)
+        if err:
+            return err
+        hits = find_photos(self.conn, self.ex, text, area, _window(month))
+        self.photos.update(h["photo_id"] for h in hits)
+        out = {"photos": hits, "total_found": len(hits)}
+        if not hits:
+            out["note"] = f"no photo text matches '{text}'; try another spelling or language once"
+        return out
+
+    def day_timeline(self, date=""):
+        m = re.fullmatch(r"\s*(\d{4}-\d{2}-\d{2})\s*", str(date or ""))
+        if not m:
+            return {"error": "date must be YYYY-MM-DD"}
+        moments = []
+        for vid in day_visits(self.conn, m.group(1)):
+            self.cards.setdefault(vid, visit_card(self.conn, vid, self.ex))
+            moments += [x for x in visit_moments(self.conn, vid, self.ex)
+                        if x["date"] == m.group(1) and (x["food"] or x["names"] or x["dishes"])]
+        self.photos.update(x["photo_id"] for x in moments[:MAX_MOMENTS])
+        return {"date": m.group(1), "moments": [moment_line(x) for x in moments[:MAX_MOMENTS]],
+                "total_found": len(moments),
+                "note": "each moment is photos close in time; photo_id cites it as [p<photo_id>]. If a moment "
+                        "matches the question, answer now in 1-2 sentences: no further lookups are needed."}
+
+    def look_at_photos(self, photo_ids=(), question=""):
+        if isinstance(photo_ids, (int, str)):
+            photo_ids = [photo_ids]
+        try:
+            ids = [int(p) for p in photo_ids][:MAX_LOOKS]
+        except (TypeError, ValueError):
+            return {"error": "photo_ids must be integers"}
+        unknown = [p for p in ids if p not in self.photos]
+        if not ids or unknown:
+            return {"error": "only photo_id values returned by find_photos or day_timeline can be looked at"}
+        out = []
+        for pid in ids:
+            card = moment_card(self.conn, self.ex, pid)
+            looks = card["media"][:1] if card else [pid]  # the moment's best food photo
+            try:
+                seen = self.vision(self.conn, looks[0], question or "What is visible?")
+            except Exception as e:  # vision is best-effort evidence, never fatal
+                seen = f"(could not look: {type(e).__name__})"
+            out.append({"photo_id": pid, "looked_at": looks[0], "seen": seen})
+        return {"observations": out, "total_found": len(out),
+                "note": "model observation of the photo, not a verified fact"}
+
     def visits_near_me(self):
         if self.lat is None:
             return {"error": "current location unknown"}
@@ -177,7 +258,8 @@ class Tools:
 
     def call(self, name, args):
         fn = getattr(self, name, None) if name in {"search_dishes", "food_visits_in_city", "visits_at_place",
-                                                  "visit_details", "visits_near_me"} else None
+                                                  "visit_details", "visits_near_me", "find_photos",
+                                                  "day_timeline", "look_at_photos"} else None
         if fn is None:
             return {"error": f"unknown tool {name}"}
         try:
@@ -187,8 +269,12 @@ class Tools:
 
 
 def _chat(messages, tools, tool_choice="auto", timeout=180):
-    body = {"messages": messages, "tools": tools, "tool_choice": tool_choice, "max_tokens": 700,
+    body = {"messages": messages, "max_tokens": 700,
             "temperature": 0.2, "chat_template_kwargs": {"reasoning_effort": "none"}}
+    if tools:
+        # With no tools offered, nothing is sent: llama.cpp's tool-call parser rejects
+        # (HTTP 500) a turn where Glimmer still tries a call under tool_choice "none".
+        body |= {"tools": tools, "tool_choice": tool_choice}
     if config.GLIMMER_MODEL:
         body["model"] = config.GLIMMER_MODEL
     req = urllib.request.Request(config.GLIMMER_URL.rstrip("/") + "/v1/chat/completions",
@@ -197,14 +283,29 @@ def _chat(messages, tools, tool_choice="auto", timeout=180):
         return json.load(r)["choices"][0]["message"]
 
 
+def _vision(conn, media_id, question, timeout=120):
+    """One photo, one question, answered by Glimmer's vision (local preview only)."""
+    from .label_server import ensure_preview  # local import: keeps agent import light
+    h = conn.execute("SELECT content_hash FROM media_items WHERE id = ?", (media_id,)).fetchone()
+    if not h:
+        return "(no such photo)"
+    b64 = base64.b64encode(ensure_preview(h[0]).read_bytes()).decode()
+    messages = [{"role": "system", "content": "Describe only what is visible in the photo. Answer in one short "
+                 "sentence. Copy any visible shop or restaurant name exactly; do not guess names."},
+                {"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                    {"type": "text", "text": question}]}]
+    return _clean(_chat(messages, [], timeout=timeout).get("content"))
+
+
 def _clean(text):
     text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.S)
     return text.strip()
 
 
-def run_agent(conn, question: str, lat=None, lon=None, chat=_chat) -> dict:
+def run_agent(conn, question: str, lat=None, lon=None, chat=_chat, vision=None) -> dict:
     t0 = time.time()
-    tools = Tools(conn, lat, lon)
+    tools = Tools(conn, lat, lon, vision=vision)
     specs = _tool_specs(lat is not None)
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": question}]
     trace, text, error = [], "", None
@@ -212,6 +313,9 @@ def run_agent(conn, question: str, lat=None, lon=None, chat=_chat) -> dict:
     def ask_model(choice):
         for attempt in (1, 2):  # one retry: llama.cpp occasionally 500s on a turn
             try:
+                if choice == "none":  # answer-only turn: offer no tools at all
+                    return chat(messages + [{"role": "user", "content": "Answer now from the tool results above."}],
+                                [], tool_choice="none")
                 return chat(messages, specs, tool_choice=choice)
             except urllib.error.HTTPError:
                 if attempt == 2:
@@ -239,6 +343,8 @@ def run_agent(conn, question: str, lat=None, lon=None, chat=_chat) -> dict:
                     args = {}
                 result = tools.call(name, args)
                 found = result.get("total_found", 1 if name == "visit_details" and "error" not in result else None)
+                if name == "look_at_photos":
+                    trace.append({"step": "look", "seen": [o["seen"] for o in result.get("observations", [])]})
                 trace.append({"step": "tool", "tool": name, "args": args, "found": found, "error": result.get("error")})
                 messages.append({"role": "tool", "tool_call_id": c.get("id", name), "name": name,
                                  "content": json.dumps(result, ensure_ascii=False)})
@@ -251,11 +357,19 @@ def run_agent(conn, question: str, lat=None, lon=None, chat=_chat) -> dict:
         text = "Glimmer did not finish an answer; these are the visits its tool calls found."
 
     cited = [int(v) for v in re.findall(r"\[v(\d+)\]", text)]
+    cited_p = [int(p) for p in re.findall(r"\[p(\d+)\]", text)]
     unsupported = sorted({v for v in cited if v not in tools.cards})
+    unsupported_p = sorted({p for p in cited_p if p not in tools.photos})
     for v in unsupported:
         text = text.replace(f"[v{v}]", "")
-    shown = [v for v in dict.fromkeys(cited) if v in tools.cards] or list(tools.cards)[:MAX_CARDS]
-    cards = [tools.cards[v] for v in shown]
+    for p in unsupported_p:
+        text = text.replace(f"[p{p}]", "")
+    moment_cards = [c for c in (moment_card(conn, tools.ex, p) for p in dict.fromkeys(cited_p) if p in tools.photos) if c]
+    moment_cards.sort(key=lambda c: not c["dishes"])  # the meal first, the anchor after it
+    shown = [v for v in dict.fromkeys(cited) if v in tools.cards]
+    if not shown and not moment_cards:
+        shown = list(tools.cards)[:MAX_CARDS]
+    cards = (moment_cards + [tools.cards[v] for v in shown])[:MAX_CARDS]
     status = "answered" if cards else "unknown"
     if not cards and not text:
         text = "I couldn't find anything about that in your history."
@@ -268,5 +382,6 @@ def run_agent(conn, question: str, lat=None, lon=None, chat=_chat) -> dict:
         "results": cards,
         "agent": {"used": True, "model": config.GLIMMER_MODEL or "muse-glimmer-30b (llama.cpp)",
                   "trace": trace, "latency_s": round(time.time() - t0, 1), "error": error,
-                  "grounding": {"cited": sorted(set(cited)), "unsupported_removed": unsupported}},
+                  "grounding": {"cited": sorted(set(cited)), "cited_photos": sorted(set(cited_p)),
+                                "unsupported_removed": unsupported, "unsupported_photos_removed": unsupported_p}},
     }

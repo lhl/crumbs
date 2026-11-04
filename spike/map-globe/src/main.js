@@ -335,7 +335,7 @@ function placeHtml(c) {
     const cls = p.status === 'confirmed' ? 'src ok' : 'src';
     return `${esc(p.name)}${p.status === 'confirmed' ? ' ✓' : '?'} <span class="${cls}">${esc(p.source)}</span>`;
   }
-  if (c.text_names.length) return `<span class="unnamed">unconfirmed</span> <span class="src">photo text: “${esc(c.text_names[0])}”</span>`;
+  if (c.text_names.length) return `<span class="unnamed">unconfirmed</span> <span class="src">photo text: ${c.text_names.slice(0, 2).map((t) => `“${esc(t)}”`).join(' · ')}</span>`;
   return '<span class="unnamed">unnamed place</span>';
 }
 
@@ -353,7 +353,7 @@ function cardHtml(c) {
     </div>`;
   }
   return `<div class="ask-card" data-visit="${c.visit_id}">
-    <div class="ask-head"><b>${esc(c.date || 'undated')}</b> · ${placeHtml(c)}</div>
+    <div class="ask-head"><b>${esc(c.date || 'undated')}</b>${c.moment ? ` <span class="src">${esc(c.moment)}</span>` : ''} · ${placeHtml(c)}</div>
     ${thumbs ? `<div class="thumbs">${thumbs}</div>` : ''}
     ${dishes ? `<div class="dishes">${dishes}</div>` : ''}
     ${rejected}${review}
@@ -402,7 +402,7 @@ async function runAsk() {
     if (!r.ok) throw new Error(d.error || r.status);
     // The agent writes a short cited answer; the parser's first line is a header.
     const a = d.agent;
-    const text = a?.used ? d.answer.replace(/\s*\[v\d+\]/g, '') : (d.results?.length ? (d.answer || '').split('\n')[0] : d.answer);
+    const text = a?.used ? d.answer.replace(/\s*\[[vp]\d+\]/g, '') : (d.results?.length ? (d.answer || '').split('\n')[0] : d.answer);
     const steps = (a?.trace || []).filter((s) => s.step === 'tool')
       .map((s) => `${esc(s.tool)}(${esc(Object.values(s.args || {}).join(', '))}) → ${s.error ? esc(s.error) : `${s.found ?? 0} found`}`);
     const traceHtml = a ? `<details class="agent-trace"><summary>${a.used

@@ -61,10 +61,10 @@ MODELS = f"""<html><head><style>{CSS}</style></head><body>
   <td class="num">848M</td><td class="num">1.68</td><td><code>BF16</code></td><td>SAM License</td></tr>
 <tr><td><span class="m">PE-Core L14-336</span><span class="chip tested">TESTED</span>
   <span class="role">Zero-shot photo labels</span></td>
-  <td class="num">0.32B<sup>†</sup></td><td class="num">2.6</td><td>not recorded</td><td>Apache 2.0</td></tr>
+  <td class="num">0.32B<sup>†</sup></td><td class="num">2.6</td><td><code>FP32</code></td><td>Apache 2.0</td></tr>
 <tr><td><span class="m">PE-Core G14-448</span><span class="chip tested">TESTED</span>
   <span class="role">Zero-shot photo labels (large)</span></td>
-  <td class="num">1.88B<sup>†</sup></td><td class="num">9.1</td><td>not recorded</td><td>Apache 2.0</td></tr>
+  <td class="num">1.88B<sup>†</sup></td><td class="num">9.1</td><td><code>FP32</code></td><td>Apache 2.0</td></tr>
 </table>
 <div class="foot">Glimmer 19.8 GB = 16.76 GB model + 1.40 GB vision tower + 1.63 GB DFlash draft (all Q4_K_M).
 † Vision encoder parameters; PE sizes are the published checkpoint sizes. Tested = measured on our photos, not in the shipped pipeline.</div>

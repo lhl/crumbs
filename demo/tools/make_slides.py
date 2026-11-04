@@ -60,14 +60,12 @@ MODELS = f"""<html><head><style>{CSS}</style></head><body>
   <span class="role">Masks for signs, menus, receipts, dishes</span></td>
   <td class="num">848M</td><td class="num">1.68</td><td><code>BF16</code></td><td>SAM License</td></tr>
 <tr><td><span class="m">PE-Core L14-336</span><span class="chip tested">TESTED</span>
-  <span class="role">Zero-shot photo labels</span></td>
-  <td class="num">0.32B<sup>†</sup></td><td class="num">2.6</td><td><code>FP32</code></td><td>Apache 2.0</td></tr>
+  <span class="role">Zero-shot photo labels · parameters are the vision encoder</span></td>
+  <td class="num">0.32B</td><td class="num">2.6</td><td><code>FP32</code></td><td>Apache 2.0</td></tr>
 <tr><td><span class="m">PE-Core G14-448</span><span class="chip tested">TESTED</span>
-  <span class="role">Zero-shot photo labels (large)</span></td>
-  <td class="num">1.88B<sup>†</sup></td><td class="num">9.1</td><td><code>FP32</code></td><td>Apache 2.0</td></tr>
+  <span class="role">Zero-shot photo labels, large · parameters are the vision encoder</span></td>
+  <td class="num">1.88B</td><td class="num">9.1</td><td><code>FP32</code></td><td>Apache 2.0</td></tr>
 </table>
-<div class="foot">Glimmer 19.8 GB = 16.76 GB model + 1.40 GB vision tower + 1.63 GB DFlash draft (all Q4_K_M).
-† Vision encoder parameters; PE sizes are the published checkpoint sizes. Tested = measured on our photos, not in the shipped pipeline.</div>
 </body></html>"""
 
 
@@ -94,12 +92,12 @@ RESULTS = f"""<html><head><style>{CSS}</style></head><body>
 JevBench <b>76.6%</b> (raw read, 231 items) · Decision Index 0.3 skill <b>32.60</b>. Not leaderboard submissions.</div>
 </div>
 <div>
-<h2>Seconds per photo<small>Strix Halo APU vs a 4× RTX PRO 6000 box (burst capacity)</small></h2>
+<h2>Seconds per photo<small>Strix Halo APU (1024 px) vs a 4× RTX PRO 6000 box (mostly 640 px)</small></h2>
 <table>
 <tr><th>Pass</th><th class="num">Strix Halo</th><th class="num">PRO 6000</th></tr>
-<tr><td class="m">Glimmer read &amp; classify</td><td class="num">19.4</td><td class="num">0.30<sup>a</sup></td></tr>
+<tr><td class="m">Glimmer read &amp; classify</td><td class="num">19.4</td><td class="num">0.30</td></tr>
 <tr><td class="m">Glimmer decision read</td><td class="num">2.69</td><td class="num">0.19</td></tr>
-<tr><td class="m">SAM 3.1, 5 prompts</td><td class="num">2.83</td><td class="num">0.24<sup>b</sup></td></tr>
+<tr><td class="m">SAM 3.1, 5 prompts</td><td class="num">2.83</td><td class="num">0.24</td></tr>
 <tr><td class="m">PE-Core L14 zero-shot</td><td class="num">0.14</td><td class="num">—</td></tr>
 <tr><td class="m">DINOv3 ViT-L embedding</td><td class="num">0.049</td><td class="num">—</td></tr>
 <tr><td class="m">Ask agent, one question</td><td class="num">17–80</td><td class="num">—</td></tr>
@@ -107,8 +105,6 @@ JevBench <b>76.6%</b> (raw read, 231 items) · Decision Index 0.3 skill <b>32.60
 <div class="note">Whole library (9,669 photos) classified on the PRO 6000 box in ~12 min. Glimmer at <code>Q4_K_M</code> is 19.8 GB on disk; the other models are 1.2–9.1 GB.</div>
 </div>
 </div>
-<div class="foot">a: FP8, 640 px previews, per replica at 16 concurrent. b: 640 px, per server. Strix Halo runs: llama.cpp (Glimmer) and ROCm PyTorch, 1024 px.
-Ask agent: 1–3 lookups plus photo checks, per question.</div>
 </body></html>"""
 
 

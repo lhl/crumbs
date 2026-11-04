@@ -50,7 +50,8 @@ def main(argv=None) -> int:
                        help="bind address (use 0.0.0.0 to label from a phone at http://<this-host>:<port>/)")
     p_api = sub.add_parser("serve", help="read-only local API for the Muse bridge (API-01 v1)")
     p_api.add_argument("--port", type=int, default=8770)
-    p_api.add_argument("--host", default="127.0.0.1")
+    p_api.add_argument("--host", default="127.0.0.1",
+                       help="bind address; outside localhost requires CRUMBS_API_TOKEN")
     sub.add_parser("score", help="score model output against user labels (DAT-06)")
     sub.add_parser("reconcile", help="evidence-score visits and build the review queue (REC-02)")
     p_ask = sub.add_parser("ask", help="ask the local index a question (AGT v1)")
@@ -61,6 +62,16 @@ def main(argv=None) -> int:
     sub.add_parser("correlate", help="cross-correlate photo visits with location stays")
 
     args = ap.parse_args(argv)
+    if args.cmd == "serve":
+        from .api import serve as api_serve
+
+        print(f"Starting Crumbs API at http://{args.host}:{args.port}/v1/ (Ctrl-C to stop)")
+        try:
+            api_serve(host=args.host, port=args.port)
+        except ValueError as e:
+            ap.error(str(e))
+        return 0
+
     conn = db.connect(config.DB_PATH)
     db.init_schema(conn)
 
@@ -142,11 +153,6 @@ def main(argv=None) -> int:
 
         print(f"labeler at http://{args.host}:{args.port}/ (Ctrl-C to stop)")
         serve(host=args.host, port=args.port)
-    elif args.cmd == "serve":
-        from .api import serve as api_serve
-
-        print(f"crumbs API at http://{args.host}:{args.port}/v1/ (read-only; Ctrl-C to stop)")
-        api_serve(host=args.host, port=args.port)
     elif args.cmd == "score":
         import json as _json
 

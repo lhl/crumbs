@@ -1,0 +1,121 @@
+"""API access-control checks using an empty synthetic evidence store."""
+import json
+import os
+from pathlib import Path
+import queue
+import subprocess
+import sys
+import tempfile
+import threading
+import unittest
+import urllib.error
+import urllib.request
+from unittest.mock import patch
+
+from crumbs import api
+
+
+class ApiTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.server = None
+        self.thread = None
+
+    def tearDown(self):
+        if self.server:
+            self.server.shutdown()
+            self.server.server_close()
+            self.thread.join(timeout=5)
+        self.temp.cleanup()
+
+    def start_server(self, host="127.0.0.1"):
+        ready = queue.Queue()
+        real_server = api.HTTPServer
+
+        def make_server(address, handler):
+            server = real_server(address, handler)
+            ready.put(server)
+            return server
+
+        def run():
+            with patch.dict(os.environ, {"CRUMBS_API_TOKEN": "synthetic-test-token"}), \
+                    patch.object(api.config, "DB_PATH", self.root / "synthetic.db"), \
+                    patch.object(api, "HTTPServer", side_effect=make_server):
+                api.serve(host=host, port=0)
+
+        self.thread = threading.Thread(target=run, daemon=True)
+        self.thread.start()
+        self.server = ready.get(timeout=5)
+        return f"http://127.0.0.1:{self.server.server_port}"
+
+    def test_non_loopback_requires_nonblank_token_before_connect(self):
+        for host in ("0.0.0.0", "", "192.0.2.1", "demo-host"):
+            for token in ("", "   "):
+                with self.subTest(host=host, token=token), \
+                        patch.dict(os.environ, {"CRUMBS_API_TOKEN": token}), \
+                        patch.object(api.db, "connect") as connect:
+                    with self.assertRaisesRegex(ValueError, "CRUMBS_API_TOKEN is required"):
+                        api.serve(host=host, port=0)
+                    connect.assert_not_called()
+
+    def test_loopback_defaults_remain_available(self):
+        for host in ("127.0.0.1", "localhost"):
+            with self.subTest(host=host), patch.dict(os.environ, {"CRUMBS_API_TOKEN": ""}), \
+                    patch.object(api.db, "connect"), patch.object(api, "HTTPServer") as server:
+                api.serve(host=host, port=0)
+                server.assert_called_once()
+                self.assertEqual(server.call_args.args[0], (host, 0))
+                server.return_value.__enter__.return_value.serve_forever.assert_called_once()
+
+    def test_bearer_auth_cannot_be_disabled_by_later_environment_change(self):
+        base = self.start_server()
+        with patch.dict(os.environ, {"CRUMBS_API_TOKEN": ""}):
+            for token in (None, "wrong-synthetic-token"):
+                headers = {"Authorization": f"Bearer {token}"} if token else {}
+                req = urllib.request.Request(base + "/v1/search", headers=headers)
+                with self.assertRaises(urllib.error.HTTPError) as err:
+                    urllib.request.urlopen(req, timeout=3)
+                self.assertEqual(err.exception.code, 401)
+            req = urllib.request.Request(base + "/v1/search", headers={
+                "Authorization": "Bearer synthetic-test-token"})
+            with urllib.request.urlopen(req, timeout=3) as response:
+                self.assertEqual(json.load(response), {"results": []})
+        with urllib.request.urlopen(base + "/v1/health", timeout=3) as response:
+            self.assertEqual(json.load(response)["status"], "ok")
+
+    def test_browser_preflight_does_not_authorize_the_following_request(self):
+        base = self.start_server()
+        req = urllib.request.Request(base + "/v1/ask", method="OPTIONS", headers={
+            "Origin": "http://synthetic-ui.invalid", "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization"})
+        with urllib.request.urlopen(req, timeout=3) as response:
+            self.assertEqual(response.status, 204)
+            self.assertIn("Authorization", response.headers["Access-Control-Allow-Headers"])
+        with self.assertRaises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(base + "/v1/ask?q=synthetic", timeout=3)
+        self.assertEqual(err.exception.code, 401)
+
+    def test_real_wildcard_bind_rejects_unauthenticated_requests(self):
+        base = self.start_server(host="0.0.0.0")
+        self.assertEqual(self.server.server_address[0], "0.0.0.0")
+        with self.assertRaises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(base + "/v1/search", timeout=3)
+        self.assertEqual(err.exception.code, 401)
+        req = urllib.request.Request(base + "/v1/search", headers={
+            "Authorization": "Bearer synthetic-test-token"})
+        with urllib.request.urlopen(req, timeout=3) as response:
+            self.assertEqual(json.load(response), {"results": []})
+
+    def test_cli_rejects_unauthenticated_lan_bind(self):
+        env = dict(os.environ, CRUMBS_DB=str(self.root / "cli.db"), CRUMBS_API_TOKEN="")
+        result = subprocess.run([sys.executable, "-m", "crumbs.cli", "serve", "--host", "0.0.0.0", "--port", "0"],
+                                env=env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("CRUMBS_API_TOKEN is required", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse((self.root / "cli.db").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

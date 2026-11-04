@@ -11,10 +11,13 @@ PLAN section 8). Design rules from the bridge sketch:
   only, tier 1 = redacted (coordinates rounded to ~1 km, file names
   stripped), tier 2 = full records. Default tier 1.
 - If CRUMBS_API_TOKEN is set, all /v1/* except /v1/health require it as a
-  Bearer token. Binds localhost by default; reach it remotely only through
-  the owner's tunnel (Tailscale/Headscale), never by exposing the port.
+  Bearer token. Binds localhost by default; a non-loopback bind requires a
+  token. Remote use belongs on a trusted LAN or the owner's authenticated
+  tunnel (Tailscale/Headscale), never an exposed public port.
 """
 
+import hmac
+import ipaddress
 import json
 import os
 from datetime import datetime
@@ -50,6 +53,8 @@ def _media_row(r, tier):
 
 
 def make_handler(conn):
+    token = os.environ.get("CRUMBS_API_TOKEN", "").strip()
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
@@ -64,8 +69,15 @@ def make_handler(conn):
             self.wfile.write(body)
 
         def _authed(self):
-            token = os.environ.get("CRUMBS_API_TOKEN")
-            return not token or self.headers.get("Authorization") == f"Bearer {token}"
+            supplied = self.headers.get("Authorization", "").encode()
+            return not token or hmac.compare_digest(supplied, f"Bearer {token}".encode())
+
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.end_headers()
 
         def do_GET(self):
             u = urlparse(self.path)
@@ -235,6 +247,16 @@ def make_handler(conn):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8770):
+    try:
+        loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = host == "localhost"
+    if not loopback and not os.environ.get("CRUMBS_API_TOKEN", "").strip():
+        raise ValueError("CRUMBS_API_TOKEN is required when binding the API outside localhost")
     conn = db.connect(config.DB_PATH)
-    db.init_schema(conn)
-    HTTPServer((host, port), make_handler(conn)).serve_forever()
+    try:
+        db.init_schema(conn)
+        with HTTPServer((host, port), make_handler(conn)) as server:
+            server.serve_forever()
+    finally:
+        conn.close()

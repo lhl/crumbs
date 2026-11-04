@@ -61,11 +61,14 @@ def main():
     ap.add_argument("--zoom-start", type=float, default=None, help="seconds: hold the full grid until here (default: end of pop-in)")
     ap.add_argument("--blur", type=float, nargs=3, metavar=("START", "FULL", "RADIUS"), default=None,
                     help="seconds and px: blur ramps from START to FULL, reaching RADIUS")
+    ap.add_argument("--blur-keys", nargs="+", metavar="T:PX", default=None,
+                    help="blur radius keyframes, e.g. 14:0 22:2.5 30:16 (linear between keys); overrides --blur")
     ap.add_argument("--fade", type=float, nargs=3, metavar=("START", "FULL", "LEVEL"), default=None,
                     help="seconds: brightness ramps down from START to FULL, ending at LEVEL (0-1)")
     ap.add_argument("--seed", type=int, default=7)
     a = ap.parse_args()
 
+    blur_keys = sorted((float(k.split(":")[0]), float(k.split(":")[1])) for k in a.blur_keys) if a.blur_keys else None
     conn = db.connect(config.DB_PATH)
     hashes = food_photos(conn)
     n = a.cols * a.rows
@@ -104,8 +107,16 @@ def main():
         cw, ch = canvas_w / z, canvas_h / z
         left, top = (canvas_w - cw) / 2, (canvas_h - ch) / 2
         out = img.resize((W, H), Image.LANCZOS, box=(left, top, left + cw, top + ch))
-        if a.blur:
+        r = 0.0
+        if blur_keys:
+            if t >= blur_keys[-1][0]:
+                r = blur_keys[-1][1]
+            for (t0, r0), (t1, r1) in zip(blur_keys, blur_keys[1:]):
+                if t0 <= t < t1:
+                    r = r0 + (r1 - r0) * (t - t0) / (t1 - t0)
+        elif a.blur:
             r = a.blur[2] * ease((t - a.blur[0]) / max(0.1, a.blur[1] - a.blur[0]))
+        if r:
             if r > 0.3:
                 out = out.filter(ImageFilter.GaussianBlur(r))
         if a.fade:
